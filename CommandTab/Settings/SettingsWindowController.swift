@@ -21,13 +21,13 @@ final class SettingsWindowController: NSWindowController {
         self.quickLaunchView = QuickLaunchSettingsView(settings: quickLaunchSettings)
         self.retryAccessibility = retryAccessibility
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 680),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Command Tab Settings"
-        window.minSize = NSSize(width: 460, height: 420)
+        window.minSize = NSSize(width: 480, height: 440)
         super.init(window: window)
         fitWindowToVisibleScreen()
         buildUI()
@@ -51,15 +51,16 @@ final class SettingsWindowController: NSWindowController {
             ?? NSScreen.screens.first?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
         let margin: CGFloat = 16
-        let maxWidth = max(460, visibleFrame.width - margin * 2)
-        let maxHeight = max(420, visibleFrame.height - margin * 2)
-        let size = NSSize(width: min(500, maxWidth), height: min(680, maxHeight))
+        let maxWidth = max(480, visibleFrame.width - margin * 2)
+        let maxHeight = max(440, visibleFrame.height - margin * 2)
+        let size = NSSize(width: min(520, maxWidth), height: min(640, maxHeight))
         window.setContentSize(size)
         window.center()
     }
 
     private func buildUI() {
         guard let contentView = window?.contentView else { return }
+        configureControls()
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -82,60 +83,112 @@ final class SettingsWindowController: NSWindowController {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 16
+        stack.spacing = 22
         stack.translatesAutoresizingMaskIntoConstraints = false
         documentView.addSubview(stack)
         NSLayoutConstraint.activate([
             documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             documentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
-            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -24),
+            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 28),
+            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -28),
             stack.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 24),
             stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24)
         ])
 
-        stack.addArrangedSubview(sectionLabel("General"))
-        launchCheckbox.target = self
-        launchCheckbox.action = #selector(toggleLaunchAtLogin)
-        stack.addArrangedSubview(launchCheckbox)
-        menuCheckbox.target = self
-        menuCheckbox.action = #selector(toggleMenuIcon)
-        stack.addArrangedSubview(menuCheckbox)
+        let header = headerView()
+        stack.addArrangedSubview(header)
+        stack.addArrangedSubview(section(title: "General", views: [
+            launchCheckbox,
+            menuCheckbox,
+            row(label: "Appearance", control: appearancePopup)
+        ]))
 
-        stack.addArrangedSubview(row(label: "Appearance", control: appearancePopup))
         for mode in AppearanceMode.allCases { appearancePopup.addItem(withTitle: mode.title) }
         appearancePopup.target = self
         appearancePopup.action = #selector(changeAppearance)
 
-        stack.addArrangedSubview(row(label: "Switcher Reveal Delay", control: revealPopup))
         for delay in RevealDelay.allCases { revealPopup.addItem(withTitle: delay.title) }
         revealPopup.target = self
         revealPopup.action = #selector(changeRevealDelay)
 
-        stack.addArrangedSubview(row(label: "Display", control: displayPopup))
         for scope in DisplayScope.allCases { displayPopup.addItem(withTitle: scope.title) }
         displayPopup.target = self
         displayPopup.action = #selector(changeDisplayScope)
 
-        stack.addArrangedSubview(row(label: "Switcher Mode", control: switcherModePopup))
         for mode in SwitcherMode.allCases { switcherModePopup.addItem(withTitle: mode.title) }
         switcherModePopup.target = self
         switcherModePopup.action = #selector(changeSwitcherMode)
 
-        stack.addArrangedSubview(sectionLabel("Quick Launch"))
-        stack.addArrangedSubview(quickLaunchView)
+        stack.addArrangedSubview(section(title: "Switcher", views: [
+            row(label: "Reveal Delay", control: revealPopup),
+            row(label: "Display", control: displayPopup),
+            row(label: "Mode", control: switcherModePopup)
+        ]))
+
+        stack.addArrangedSubview(section(title: "Quick Launch", views: [quickLaunchView]))
 
         permissionLabel.lineBreakMode = .byWordWrapping
         permissionLabel.maximumNumberOfLines = 3
-        permissionLabel.preferredMaxLayoutWidth = 400
-        stack.addArrangedSubview(permissionLabel)
+        permissionLabel.preferredMaxLayoutWidth = 440
+        permissionLabel.font = .systemFont(ofSize: 12)
+        permissionLabel.textColor = .secondaryLabelColor
         let permissionButton = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibility))
-        stack.addArrangedSubview(permissionButton)
+        permissionButton.controlSize = .regular
+        permissionButton.bezelStyle = .rounded
+        stack.addArrangedSubview(section(title: "Accessibility", views: [permissionLabel, permissionButton]))
+    }
+
+    private func configureControls() {
+        [launchCheckbox, menuCheckbox].forEach { button in
+            button.target = self
+            button.controlSize = .regular
+            button.font = .systemFont(ofSize: 13)
+        }
+        launchCheckbox.action = #selector(toggleLaunchAtLogin)
+        menuCheckbox.action = #selector(toggleMenuIcon)
+        [appearancePopup, revealPopup, displayPopup, switcherModePopup].forEach { popup in
+            popup.controlSize = .regular
+            popup.font = .systemFont(ofSize: 13)
+        }
+    }
+
+    private func headerView() -> NSView {
+        let title = NSTextField(labelWithString: "Command Tab")
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Native switching, display scope, and quick launch shortcuts.")
+        subtitle.font = .systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.lineBreakMode = .byWordWrapping
+        subtitle.maximumNumberOfLines = 2
+        subtitle.preferredMaxLayoutWidth = 440
+
+        let stack = NSStackView(views: [title, subtitle])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 3
+        return stack
+    }
+
+    private func section(title: String, views: [NSView]) -> NSView {
+        let titleLabel = sectionLabel(title)
+        let body = NSStackView(views: views)
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.spacing = 9
+
+        let wrapper = NSStackView(views: [titleLabel, body])
+        wrapper.orientation = .vertical
+        wrapper.alignment = .leading
+        wrapper.spacing = 8
+        return wrapper
     }
 
     private func sectionLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .boldSystemFont(ofSize: 13)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .labelColor
         return label
     }
 
@@ -144,9 +197,15 @@ final class SettingsWindowController: NSWindowController {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+
         let text = NSTextField(labelWithString: label)
-        text.widthAnchor.constraint(equalToConstant: 160).isActive = true
-        control.widthAnchor.constraint(greaterThanOrEqualToConstant: 210).isActive = true
+        text.font = .systemFont(ofSize: 13)
+        text.textColor = .secondaryLabelColor
+        text.alignment = .right
+        text.widthAnchor.constraint(equalToConstant: 138).isActive = true
+        control.widthAnchor.constraint(equalToConstant: 244).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 394).isActive = true
         row.addArrangedSubview(text)
         row.addArrangedSubview(control)
         return row
@@ -201,8 +260,26 @@ final class SettingsWindowController: NSWindowController {
             self?.retryAccessibility()
         }
     }
+
 }
 
 private final class SettingsDocumentView: NSView {
     override var isFlipped: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        wantsLayer = true
+        layer?.backgroundColor = resolvedCGColor(.windowBackgroundColor)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.backgroundColor = resolvedCGColor(.windowBackgroundColor)
+    }
+
+    private func resolvedCGColor(_ color: NSColor) -> CGColor {
+        var result: CGColor!
+        effectiveAppearance.performAsCurrentDrawingAppearance { result = color.cgColor }
+        return result
+    }
 }

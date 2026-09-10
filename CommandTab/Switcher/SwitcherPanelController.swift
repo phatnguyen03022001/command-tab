@@ -12,22 +12,20 @@ final class SwitcherPanelController {
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 8
+        stack.spacing = 6
         stack.detachesHiddenViews = true
         stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }()
 
-    private lazy var rootView: NSView = {
-        let root = NSView()
-        root.wantsLayer = true
-        root.layer?.backgroundColor = NSColor.clear.cgColor
+    private lazy var rootView: NSVisualEffectView = {
+        let root = SwitcherPanelRootView()
         root.addSubview(stackView)
         NSLayoutConstraint.activate([
-            stackView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
-            stackView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
-            stackView.topAnchor.constraint(equalTo: root.topAnchor, constant: 8),
-            stackView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -8)
+            stackView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+            stackView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -10),
+            stackView.topAnchor.constraint(equalTo: root.topAnchor, constant: 10),
+            stackView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -10)
         ])
         return root
     }()
@@ -65,7 +63,7 @@ final class SwitcherPanelController {
         newPanel.isOpaque = false
         newPanel.backgroundColor = .clear
         newPanel.level = .modalPanel
-        newPanel.hasShadow = false
+        newPanel.hasShadow = true
         newPanel.hidesOnDeactivate = false
         newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         newPanel.contentView = rootView
@@ -118,8 +116,8 @@ final class SwitcherPanelController {
             return number.uint32Value == contextDisplayID
         } ?? NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let width = min(CGFloat(max(1, itemCount)) * 124 + 16, visibleFrame.width * 0.86)
-        let height: CGFloat = 98
+        let width = min(CGFloat(max(1, itemCount)) * 114 + 20, visibleFrame.width * 0.86)
+        let height: CGFloat = 96
         let frame = NSRect(
             x: visibleFrame.midX - width / 2,
             y: visibleFrame.midY - height / 2,
@@ -127,6 +125,39 @@ final class SwitcherPanelController {
             height: height
         )
         panel.setFrame(frame, display: true)
+    }
+
+}
+
+
+
+private final class SwitcherPanelRootView: NSVisualEffectView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        material = .popover
+        blendingMode = .behindWindow
+        state = .active
+        wantsLayer = true
+        layer?.cornerRadius = 16
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+        updateBorder()
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateBorder()
+    }
+
+    private func updateBorder() {
+        var border: CGColor!
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            border = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
+        }
+        layer?.borderColor = border
     }
 }
 

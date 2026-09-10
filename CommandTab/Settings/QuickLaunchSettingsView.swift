@@ -11,7 +11,7 @@ final class QuickLaunchSettingsView: NSStackView {
         super.init(frame: .zero)
         orientation = .vertical
         alignment = .leading
-        spacing = 6
+        spacing = 5
         translatesAutoresizingMaskIntoConstraints = false
         for slot in 1...9 {
             let row = QuickLaunchSlotRowView(
@@ -81,29 +81,44 @@ final class QuickLaunchSettingsView: NSStackView {
 private final class QuickLaunchSlotRowView: NSStackView {
     private let nameLabel = NSTextField(labelWithString: "Not Assigned")
     private let iconView = NSImageView()
+    private let shortcutLabel: NSTextField
     private let chooseButton: NSButton
     private let clearButton: NSButton
 
     init(slot: Int, choose: @escaping () -> Void, clear: @escaping () -> Void) {
+        shortcutLabel = NSTextField(labelWithString: "⌘\(slot)")
         chooseButton = ClosureButton(title: "Choose…", action: choose)
         clearButton = ClosureButton(title: "Clear", action: clear)
         super.init(frame: .zero)
         orientation = .horizontal
         alignment = .centerY
         spacing = 8
+        translatesAutoresizingMaskIntoConstraints = false
 
-        let shortcut = NSTextField(labelWithString: "⌘\(slot)")
-        shortcut.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
-        shortcut.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        shortcutLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        shortcutLabel.textColor = .secondaryLabelColor
+        shortcutLabel.alignment = .right
+        shortcutLabel.widthAnchor.constraint(equalToConstant: 34).isActive = true
+
         iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.widthAnchor.constraint(equalToConstant: 22).isActive = true
-        iconView.heightAnchor.constraint(equalToConstant: 22).isActive = true
-        nameLabel.lineBreakMode = .byTruncatingMiddle
-        nameLabel.widthAnchor.constraint(equalToConstant: 190).isActive = true
-        chooseButton.widthAnchor.constraint(equalToConstant: 78).isActive = true
-        clearButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        iconView.imageAlignment = .alignCenter
+        iconView.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 20).isActive = true
 
-        addArrangedSubview(shortcut)
+        nameLabel.font = .systemFont(ofSize: 13)
+        nameLabel.lineBreakMode = .byTruncatingMiddle
+        nameLabel.widthAnchor.constraint(equalToConstant: 202).isActive = true
+
+        [chooseButton, clearButton].forEach { button in
+            button.controlSize = .small
+            button.font = .systemFont(ofSize: 12)
+            button.bezelStyle = .rounded
+        }
+        chooseButton.widthAnchor.constraint(equalToConstant: 82).isActive = true
+        clearButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        heightAnchor.constraint(equalToConstant: 28).isActive = true
+
+        addArrangedSubview(shortcutLabel)
         addArrangedSubview(iconView)
         addArrangedSubview(nameLabel)
         addArrangedSubview(chooseButton)
@@ -114,7 +129,9 @@ private final class QuickLaunchSlotRowView: NSStackView {
 
     func configure(name: String, icon: NSImage?, assigned: Bool) {
         nameLabel.stringValue = name
+        nameLabel.textColor = assigned ? .labelColor : .secondaryLabelColor
         iconView.image = icon ?? NSImage(systemSymbolName: "app", accessibilityDescription: nil)
+        iconView.contentTintColor = assigned ? nil : .tertiaryLabelColor
         chooseButton.title = assigned ? "Change…" : "Choose…"
         clearButton.isEnabled = assigned
     }

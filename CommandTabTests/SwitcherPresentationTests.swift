@@ -34,6 +34,12 @@ struct SwitcherPresentationTests {
         textFields(in: view).filter { !$0.isHidden }
     }
 
+    static func imageViews(in view: NSView) -> [NSImageView] {
+        var images = view is NSImageView ? [view as! NSImageView] : []
+        for child in view.subviews { images += imageViews(in: child) }
+        return images
+    }
+
     static func resolvedCGColor(_ color: NSColor, appearance: NSAppearance.Name) -> CGColor {
         let resolvedAppearance = NSAppearance(named: appearance)!
         var result: CGColor!
@@ -41,22 +47,57 @@ struct SwitcherPresentationTests {
         return result
     }
 
-    static func requireSemanticColors(_ item: SwitcherItemView, appearance: NSAppearance.Name) {
+    static func rgba(_ color: CGColor?) -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        guard let color,
+              let converted = NSColor(cgColor: color)?.usingColorSpace(.deviceRGB) else {
+            fputs("FAIL: color could not resolve to device RGB\n", stderr)
+            exit(1)
+        }
+        return (converted.redComponent, converted.greenComponent, converted.blueComponent, converted.alphaComponent)
+    }
+
+    static func selectionFillLayer(in item: SwitcherItemView) -> CALayer {
+        guard let layer = Mirror(reflecting: item).children.first(where: { $0.label == "selectionFillLayer" })?.value as? CALayer else {
+            fputs("FAIL: switcher item must expose one dedicated selection fill layer\n", stderr)
+            exit(1)
+        }
+        return layer
+    }
+
+    static func requireApprovedColors(_ item: SwitcherItemView, appearance: NSAppearance.Name) {
         item.appearance = NSAppearance(named: appearance)
+        let fillLayer = selectionFillLayer(in: item)
+
         item.isSelected = false
         let unselected = visibleTextFields(in: item)
         require(unselected.count == 2, "Windows mode must keep two meaningful labels in \(appearance.rawValue)")
         require(unselected[0].textColor == .labelColor, "primary label must use semantic labelColor")
         require(unselected[1].textColor == .secondaryLabelColor, "secondary title must use semantic secondaryLabelColor")
-        require(item.layer?.backgroundColor == resolvedCGColor(.controlBackgroundColor, appearance: appearance),
-                "unselected item must resolve semantic controlBackgroundColor in its effective appearance")
+        require(rgba(item.layer?.backgroundColor).alpha == 0, "unselected item base must be clear")
+        require(rgba(fillLayer.backgroundColor).alpha == 0, "unselected selection fill must be clear")
+        require(item.layer?.borderWidth == 0, "unselected item must not have a border")
+        require(item.layer?.shadowOpacity == 0, "unselected item must not cast a shadow")
 
         item.isSelected = true
         let selected = visibleTextFields(in: item)
-        require(item.layer?.backgroundColor == resolvedCGColor(.selectedContentBackgroundColor, appearance: appearance),
-                "selected item must resolve semantic selectedContentBackgroundColor in its effective appearance")
-        require(selected.allSatisfy { $0.textColor == .alternateSelectedControlTextColor },
-                "selected labels must use semantic selected-control foreground")
+        let fill = rgba(fillLayer.backgroundColor)
+        require(rgba(item.layer?.backgroundColor).alpha == 0, "selected item base must remain clear to prevent double fill")
+        require(fill.alpha > 0.9, "selected item must have exactly one visible selection fill")
+        require(abs(fill.red - fill.green) < 0.02 && abs(fill.green - fill.blue) < 0.02,
+                "selection fill must remain neutral monochrome rather than accent-colored")
+        require(fillLayer.backgroundColor != resolvedCGColor(.selectedContentBackgroundColor, appearance: appearance),
+                "selection fill must not use selectedContentBackgroundColor")
+
+        let dark = appearance == .darkAqua
+        let fillLuminance = (fill.red + fill.green + fill.blue) / 3
+        require(dark ? fillLuminance > 0.8 : fillLuminance < 0.2,
+                "selection fill must be near-white in Dark and near-black in Light")
+        for label in selected {
+            let text = rgba(label.textColor?.cgColor)
+            let textLuminance = (text.red + text.green + text.blue) / 3
+            require(dark ? textLuminance < 0.2 : textLuminance > 0.8,
+                    "selected text must contrast with the monochrome selection fill")
+        }
     }
 
     static func main() {
@@ -66,12 +107,16 @@ struct SwitcherPresentationTests {
         let applicationItem = SwitcherItemView(window: window(), icon: icon, mode: .applications)
         require(visibleTextFields(in: applicationItem).map(\.stringValue) == ["Code"],
                 "Applications mode must show application name only")
+        require(imageViews(in: applicationItem).contains { !$0.isHidden && $0.image != nil },
+                "Applications mode must keep a visible application icon")
 
         let windowsItem = SwitcherItemView(window: window(), icon: icon, mode: .windows)
         require(visibleTextFields(in: windowsItem).map(\.stringValue) == ["Code", "README.md — Code"],
                 "Windows mode must show app name plus meaningful real window title")
-        requireSemanticColors(windowsItem, appearance: .aqua)
-        requireSemanticColors(windowsItem, appearance: .darkAqua)
+        require(imageViews(in: windowsItem).contains { !$0.isHidden && $0.image != nil },
+                "Windows mode must keep a visible application icon")
+        requireApprovedColors(windowsItem, appearance: .aqua)
+        requireApprovedColors(windowsItem, appearance: .darkAqua)
 
         let duplicateTitle = SwitcherItemView(window: window(title: "  code  "), icon: icon, mode: .windows)
         require(visibleTextFields(in: duplicateTitle).map(\.stringValue) == ["Code"],
@@ -99,8 +144,18 @@ struct SwitcherPresentationTests {
             fputs("FAIL: switcher root unavailable\n", stderr)
             exit(1)
         }
-        require(!(root is NSVisualEffectView), "switcher root must not use shared visual-effect HUD material")
-        require(panel?.hasShadow == false, "transparent switcher panel must not cast a group shadow")
+        guard let materialRoot = root as? NSVisualEffectView else {
+            fputs("FAIL: switcher must use one shared native visual-effect container\n", stderr)
+            exit(1)
+        }
+        require(materialRoot.material == .popover, "shared switcher container must use popover material")
+        require((materialRoot.layer?.cornerRadius ?? 0) > 0, "shared switcher container must be rounded")
+        require((materialRoot.layer?.borderWidth ?? 0) > 0, "shared switcher container must have a subtle border")
+        let border = rgba(materialRoot.layer?.borderColor)
+        let separator = rgba(resolvedCGColor(.separatorColor, appearance: materialRoot.effectiveAppearance.name))
+        require(abs(border.red - separator.red) < 0.05 && abs(border.green - separator.green) < 0.05 && abs(border.blue - separator.blue) < 0.05,
+                "shared switcher border must derive from semantic separator color")
+        require(panel?.hasShadow == true, "shared native switcher panel must use native panel shadow")
         controller.close()
         print("SwitcherPresentationTests passed")
     }
