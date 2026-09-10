@@ -33,4 +33,26 @@ if grep -R -n --include='*.swift' 'public-fallback\|case fallback' "$APP"; then
   exit 1
 fi
 
+HOTKEY="$APP/Input/HotKeyEventTap.swift"
+
+if grep -R -n --include='*.swift' 'Process[[:space:]]*(\|NSTask\|/bin/sh\|/usr/bin/open\|open -a ' "$APP"; then
+  echo 'FAIL: shell/subprocess quick-launch implementation detected' >&2
+  exit 1
+fi
+
+if (( $(grep -R -h --include='*.swift' 'CGEvent\.tapCreate' "$APP" | wc -l | tr -d ' ') != 1 )); then
+  echo 'FAIL: production must keep exactly one CGEvent tap' >&2
+  exit 1
+fi
+
+if ! grep -q 'QuickLaunchShortcutPolicy\.slot' "$HOTKEY"; then
+  echo 'FAIL: existing event tap is not routing quick-launch shortcuts through policy' >&2
+  exit 1
+fi
+
+if ! grep -q 'keyboardEventAutorepeat' "$HOTKEY"; then
+  echo 'FAIL: quick launch must explicitly handle key repeat' >&2
+  exit 1
+fi
+
 print 'SourcePolicyTests passed'

@@ -2,6 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = CommandTabSettings.shared
+    private let quickLaunchSettings = QuickLaunchSettings.shared
     private let enumerator = WindowEnumerator()
     private let focusController = WindowFocusController()
     private let switcher = SwitcherPanelController()
@@ -11,7 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         focusController: focusController,
         switcher: switcher
     )
-    private lazy var eventTap = HotKeyEventTap(delegate: sessionController)
+    private lazy var quickLaunchController = QuickLaunchController(settings: quickLaunchSettings)
+    private lazy var eventTap = HotKeyEventTap(
+        delegate: sessionController,
+        quickLaunchController: quickLaunchController
+    )
     private lazy var menuBar = MenuBarController(
         settings: settings,
         openSettings: { [weak self] in self?.showSettings() },
@@ -19,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private lazy var settingsWindow = SettingsWindowController(
         settings: settings,
+        quickLaunchSettings: quickLaunchSettings,
         retryAccessibility: { [weak self] in self?.installEventTapIfAllowed() }
     )
 

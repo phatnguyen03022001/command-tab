@@ -11,13 +11,15 @@ protocol HotKeyEventTapDelegate: AnyObject {
 
 final class HotKeyEventTap {
     private weak var delegate: HotKeyEventTapDelegate?
+    private let quickLaunchController: QuickLaunchController
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
     var isRunning: Bool { eventTap != nil }
 
-    init(delegate: HotKeyEventTapDelegate) {
+    init(delegate: HotKeyEventTapDelegate, quickLaunchController: QuickLaunchController) {
         self.delegate = delegate
+        self.quickLaunchController = quickLaunchController
     }
 
     func start() -> Bool {
@@ -75,6 +77,18 @@ final class HotKeyEventTap {
 
         if type == .keyDown, keyCode == KeyCode.tab, commandDown {
             return delegate.commandTabPressed(reverse: shiftDown) ? nil : Unmanaged.passUnretained(event)
+        }
+
+        if type == .keyDown,
+           let slot = QuickLaunchShortcutPolicy.slot(
+               forKeyCode: keyCode,
+               commandDown: commandDown,
+               switcherActive: delegate.isSwitcherSessionActive
+           ) {
+            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            return quickLaunchController.handle(slot: slot, isRepeat: isRepeat)
+                ? nil
+                : Unmanaged.passUnretained(event)
         }
 
         if delegate.isSwitcherSessionActive {

@@ -81,5 +81,23 @@ run_test WindowSpaceSnapshotLiveTests \
   "$ROOT/CommandTab/Windows/WindowEnumerator.swift" \
   "$ROOT/CommandTabTests/WindowSpaceSnapshotLiveTests.swift"
 
+run_test QuickLaunchSettingsTests \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTabTests/QuickLaunchSettingsTests.swift"
+
+run_test QuickLaunchControllerTests \
+  "$ROOT/CommandTab/Support/Logger.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchController.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchApplicationService.swift" \
+  "$ROOT/CommandTabTests/QuickLaunchControllerTests.swift"
+
+run_test QuickLaunchApplicationResolverTests \
+  "$ROOT/CommandTab/Support/Logger.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchController.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchApplicationService.swift" \
+  "$ROOT/CommandTabTests/QuickLaunchApplicationResolverTests.swift"
+
 chmod +x "$ROOT/CommandTabTests/SourcePolicyTests.sh"
 "$ROOT/CommandTabTests/SourcePolicyTests.sh"

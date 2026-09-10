@@ -2,6 +2,7 @@ import AppKit
 
 final class SettingsWindowController: NSWindowController {
     private let settings: CommandTabSettings
+    private let quickLaunchView: QuickLaunchSettingsView
     private let retryAccessibility: () -> Void
     private let launchCheckbox = NSButton(checkboxWithTitle: "Launch at Login", target: nil, action: nil)
     private let menuCheckbox = NSButton(checkboxWithTitle: "Show Menu Bar Icon", target: nil, action: nil)
@@ -10,11 +11,16 @@ final class SettingsWindowController: NSWindowController {
     private let displayPopup = NSPopUpButton()
     private let permissionLabel = NSTextField(labelWithString: "")
 
-    init(settings: CommandTabSettings, retryAccessibility: @escaping () -> Void) {
+    init(
+        settings: CommandTabSettings,
+        quickLaunchSettings: QuickLaunchSettings,
+        retryAccessibility: @escaping () -> Void
+    ) {
         self.settings = settings
+        self.quickLaunchView = QuickLaunchSettingsView(settings: quickLaunchSettings)
         self.retryAccessibility = retryAccessibility
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 620),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -72,6 +78,9 @@ final class SettingsWindowController: NSWindowController {
         displayPopup.target = self
         displayPopup.action = #selector(changeDisplayScope)
 
+        stack.addArrangedSubview(sectionLabel("Quick Launch"))
+        stack.addArrangedSubview(quickLaunchView)
+
         permissionLabel.lineBreakMode = .byWordWrapping
         permissionLabel.maximumNumberOfLines = 3
         permissionLabel.preferredMaxLayoutWidth = 400
@@ -105,6 +114,7 @@ final class SettingsWindowController: NSWindowController {
         appearancePopup.selectItem(at: AppearanceMode.allCases.firstIndex(of: settings.appearanceMode) ?? 0)
         revealPopup.selectItem(at: RevealDelay.allCases.firstIndex(of: settings.revealDelay) ?? 1)
         displayPopup.selectItem(at: DisplayScope.allCases.firstIndex(of: settings.displayScope) ?? 0)
+        quickLaunchView.refresh()
         if AccessibilityPermission.isTrusted() {
             permissionLabel.stringValue = "Accessibility is enabled. Command Tab can intercept ⌘Tab and focus selected windows."
         } else {

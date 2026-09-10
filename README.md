@@ -13,6 +13,12 @@ It exists for one narrow job: keep keyboard app switching inside the current Mis
 - Focus targets the exact representative `CGWindowID` through Accessibility.
 - The switcher UI is native AppKit and reuses its panel and item views between sessions.
 
+## Quick Launch
+
+Command Tab also provides nine configurable application shortcuts: `⌘1` through `⌘9`. Assignments are managed in Settings with the native macOS application picker. A configured slot launches or activates that app and consumes the shortcut; an unconfigured or invalid slot passes the original shortcut through to the foreground application.
+
+Quick Launch uses `NSWorkspace` / `NSRunningApplication` directly. It does not use shell commands, subprocesses, application indexing, polling, networking, or additional permissions. The current event-tap API exposes Command as an aggregate modifier, so v0.2.0 does not distinguish left Command from right Command.
+
 ## Requirements
 
 - macOS 15 or later.
@@ -59,6 +65,7 @@ The Space calls are read-only. Command Tab performs no Space mutation, Space swi
 - Accessibility permission is required for interception and exact window focus.
 - Ordering follows the eligible WindowServer snapshot; Command Tab does not implement cross-application per-window MRU history.
 - The supplied build scripts target Apple silicon macOS 15+.
+- Quick Launch currently treats left and right Command identically because the event tap uses the aggregate Command modifier.
 
 ## License
 

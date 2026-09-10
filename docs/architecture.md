@@ -6,6 +6,14 @@ Command Tab is a single-process `LSUIElement` AppKit application. It has no help
 
 A switch session is immutable: input creates one authoritative window/Space snapshot, navigation uses that frozen item list, and stale identity or Space context cancels rather than retargeting.
 
+The single existing `HotKeyEventTap` routes input into two independent paths:
+
+`⌘Tab → SwitchSessionController`
+
+`⌘1…⌘9 → QuickLaunchController → configured assignment → NSWorkspace / NSRunningApplication`
+
+Quick Launch is disabled while a switcher session is active. It does not enumerate windows, inspect Spaces, or call the exact-window focus path. Key-repeat events for a valid configured slot are consumed without repeating the launch/activation action.
+
 ## Selection pipeline
 
 Production selection follows this order exactly:
@@ -59,6 +67,14 @@ The UI reuses a single AppKit hierarchy:
 `SwitcherItemView` instances are retained to a high-water mark and reconfigured or hidden instead of rebuilt every session. Application icons are cached by stable app key for the process lifetime.
 
 A configurable reveal delay preserves the quick-switch path: a short ⌘Tab interaction can commit before the panel is shown, while continued navigation reveals and updates the reused panel.
+
+## Quick Launch
+
+`QuickLaunchSettings` stores at most nine local UserDefaults dictionaries keyed by slot. Each assignment contains the application path, display name, and bundle identifier when available. Bundle identifier is the primary logical identity; the stored URL is preferred when it is still a valid matching application bundle, otherwise LaunchServices resolves the current URL for that bundle identifier.
+
+`QuickLaunchApplicationService` activates an already-running application or asks `NSWorkspace` to open it. No shell command, subprocess, helper daemon, additional event tap, polling loop, filesystem crawl, or Space mutation is involved. Invalid assignments fail safe and leave the original shortcut unconsumed.
+
+The public CGEvent modifier flags expose Command as an aggregate modifier, so Quick Launch intentionally does not maintain fragile left/right modifier state. Both Command keys therefore share the same configured 1–9 semantics.
 
 ## Diagnostics
 
