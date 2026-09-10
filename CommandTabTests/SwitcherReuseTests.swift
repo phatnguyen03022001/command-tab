@@ -35,7 +35,7 @@ struct SwitcherReuseTests {
 
     static func allText(in view: NSView) -> [String] {
         var values: [String] = []
-        if let field = view as? NSTextField { values.append(field.stringValue) }
+        if let field = view as? NSTextField, !field.isHidden { values.append(field.stringValue) }
         for child in view.subviews { values.append(contentsOf: allText(in: child)) }
         return values
     }
@@ -48,7 +48,7 @@ struct SwitcherReuseTests {
             window(id: 101, pid: 11),
             window(id: 102, pid: 12)
         ]
-        controller.show(windows: firstWindows, selectedIndex: 1, sessionID: 1)
+        controller.show(windows: firstWindows, selectedIndex: 1, sessionID: 1, mode: .applications)
         guard let firstPanel = panel(of: controller), let firstRoot = firstPanel.contentView,
               let firstStack = firstRoot.subviews.compactMap({ $0 as? NSStackView }).first else {
             fputs("FAIL: initial stable hierarchy unavailable\n", stderr)
@@ -63,7 +63,7 @@ struct SwitcherReuseTests {
             window(id: 201, pid: 21),
             window(id: 202, pid: 22)
         ]
-        controller.show(windows: secondWindows, selectedIndex: 0, sessionID: 2)
+        controller.show(windows: secondWindows, selectedIndex: 0, sessionID: 2, mode: .applications)
         guard let secondPanel = panel(of: controller), let secondRoot = secondPanel.contentView,
               let secondStack = secondRoot.subviews.compactMap({ $0 as? NSStackView }).first else {
             fputs("FAIL: repeated stable hierarchy unavailable\n", stderr)
@@ -80,15 +80,14 @@ struct SwitcherReuseTests {
         )
 
         controller.close()
-        controller.show(windows: [window(id: 300, pid: 30)], selectedIndex: 0, sessionID: 3)
+        controller.show(windows: [window(id: 300, pid: 30)], selectedIndex: 0, sessionID: 3, mode: .applications)
         let thirdItems = itemViews(of: controller)
         require(thirdItems.count == 3, "high-water-mark item pool must be retained")
         require(thirdItems[0] === firstItems[0], "first pooled item must be reused after count shrinks")
         require(secondStack.arrangedSubviews.count == 3, "pooled arranged views must not accumulate duplicates")
         require(secondStack.arrangedSubviews.filter { !$0.isHidden }.count == 1, "unused pooled views must be hidden without layout gaps")
         let text = allText(in: thirdItems[0])
-        require(text.contains("Window-300"), "reused item must replace stale title")
-        require(text.contains("App-30"), "reused item must replace stale app label")
+        require(text == ["App-30"], "reused item must show only the current application name")
         require(thirdItems[0].isSelected, "active reused item must carry current selection")
         require(!thirdItems[1].isSelected && !thirdItems[2].isSelected, "hidden pooled items must not keep stale selection")
         controller.close()

@@ -30,7 +30,7 @@ struct AppDedupePolicyTests {
         )
     }
 
-    static func items(_ windows: [WindowModel], currentSpace: UInt64 = 3) -> [WindowModel] {
+    static func filtered(_ windows: [WindowModel], currentSpace: UInt64 = 3) -> [WindowModel] {
         WindowSpaceFilter.eligible(
             windows,
             context: VisibleSpaceContext(currentSpaceByDisplay: [1: currentSpace]),
@@ -40,51 +40,48 @@ struct AppDedupePolicyTests {
     }
 
     static func main() {
-        let samePID = items([
+        let samePID = filtered([
             window(id: 1, pid: 100, spaceIDs: [3]),
-            window(id: 2, pid: 100, spaceIDs: [3])
+            window(id: 2, pid: 100, spaceIDs: [3]),
+            window(id: 3, pid: 100, spaceIDs: [4])
         ])
-        require(samePID.map(\.id) == [1], "same-PID same-Space windows must collapse to one app item")
+        require(samePID.map(\.id) == [1, 2], "exact Space filtering must preserve two current-Space same-PID windows")
+        require(SwitcherModePolicy.items(from: samePID, mode: .applications).map(\.id) == [1],
+                "Applications mode must dedupe current-Space windows by PID")
+        require(SwitcherModePolicy.items(from: samePID, mode: .windows).map(\.id) == [1, 2],
+                "Windows mode must preserve all exact current-Space CGWindowIDs")
 
-        let zOrder = items([
-            window(id: 10, pid: 200, spaceIDs: [3]),
-            window(id: 11, pid: 200, spaceIDs: [3]),
-            window(id: 12, pid: 200, spaceIDs: [3])
-        ])
-        require(zOrder.map(\.id) == [10], "first eligible WindowServer-order window must win")
-
-        let crossSpace = items([
-            window(id: 20, pid: 300, spaceIDs: [3]),
-            window(id: 21, pid: 300, spaceIDs: [4])
-        ])
-        require(crossSpace.map(\.id) == [20], "off-Space sibling must not influence representative")
-
-        let offSpaceFirst = items([
+        let offSpaceFirst = filtered([
             window(id: 30, pid: 400, spaceIDs: [4]),
             window(id: 31, pid: 400, spaceIDs: [3])
         ])
-        require(offSpaceFirst.map(\.id) == [31], "Space filtering must happen before app dedupe")
+        require(offSpaceFirst.map(\.id) == [31], "off-Space sibling must be excluded before mode policy")
+        require(SwitcherModePolicy.items(from: offSpaceFirst, mode: .applications).map(\.id) == [31],
+                "Applications dedupe must happen only after Space filtering")
 
-        let sameBundleDifferentPIDs = items([
+        let sameBundleDifferentPIDs = filtered([
             window(id: 40, pid: 500, bundleIdentifier: "shared.bundle", spaceIDs: [3]),
             window(id: 41, pid: 501, bundleIdentifier: "shared.bundle", spaceIDs: [3])
         ])
         require(
-            sameBundleDifferentPIDs.map(\.id) == [40, 41],
-            "different PIDs must not collapse merely because bundle identifiers match"
+            SwitcherModePolicy.items(from: sameBundleDifferentPIDs, mode: .applications).map(\.id) == [40, 41],
+            "Applications mode must dedupe by PID, not bundle identifier"
         )
 
-        let sticky = items([
+        let sticky = filtered([
             window(id: 50, pid: 600, spaceIDs: [3, 4]),
             window(id: 51, pid: 600, spaceIDs: [3])
         ])
-        require(sticky.map(\.id) == [50], "sticky/All-Spaces membership must preserve first eligible representative")
+        require(SwitcherModePolicy.items(from: sticky, mode: .applications).map(\.id) == [50],
+                "Applications mode must preserve first WindowServer-order representative")
+        require(SwitcherModePolicy.items(from: sticky, mode: .windows).map(\.id) == [50, 51],
+                "Windows mode must retain exact sticky and current-Space window identities")
 
-        let unknownFirst = items([
+        let unknownFirst = filtered([
             window(id: 60, pid: 700, spaceIDs: []),
             window(id: 61, pid: 700, spaceIDs: [3])
         ])
-        require(unknownFirst.map(\.id) == [61], "unknown Space membership must be excluded before dedupe")
+        require(unknownFirst.map(\.id) == [61], "unknown Space membership must fail closed before mode policy")
 
         print("AppDedupePolicyTests passed")
     }

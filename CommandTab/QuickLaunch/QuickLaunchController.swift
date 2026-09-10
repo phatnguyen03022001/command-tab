@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 enum QuickLaunchShortcutPolicy {
     private static let slotsByKeyCode: [UInt16: Int] = [
@@ -13,8 +14,12 @@ enum QuickLaunchShortcutPolicy {
         25: 9
     ]
 
-    static func slot(forKeyCode keyCode: UInt16, commandDown: Bool, switcherActive: Bool) -> Int? {
-        guard commandDown, !switcherActive else { return nil }
+    static func slot(forKeyCode keyCode: UInt16, flags: CGEventFlags, switcherActive: Bool) -> Int? {
+        let meaningfulModifiers: CGEventFlags = [
+            .maskCommand, .maskShift, .maskControl, .maskAlternate, .maskSecondaryFn
+        ]
+        let normalized = flags.intersection(meaningfulModifiers)
+        guard normalized == [.maskCommand], !switcherActive else { return nil }
         return slotsByKeyCode[keyCode]
     }
 }

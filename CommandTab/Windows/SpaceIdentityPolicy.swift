@@ -45,7 +45,18 @@ enum WindowSpaceFilter {
             }
             return window.spaceIDs.contains { permitted.contains($0) }
         }
-        return ApplicationWindowDedupePolicy.representatives(from: spaceEligible)
+        return spaceEligible
+    }
+}
+
+enum SwitcherModePolicy {
+    static func items(from windows: [WindowModel], mode: SwitcherMode) -> [WindowModel] {
+        switch mode {
+        case .applications:
+            return ApplicationWindowDedupePolicy.representatives(from: windows)
+        case .windows:
+            return windows
+        }
     }
 }
 

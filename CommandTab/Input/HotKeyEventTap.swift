@@ -82,7 +82,7 @@ final class HotKeyEventTap {
         if type == .keyDown,
            let slot = QuickLaunchShortcutPolicy.slot(
                forKeyCode: keyCode,
-               commandDown: commandDown,
+               flags: flags,
                switcherActive: delegate.isSwitcherSessionActive
            ) {
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0

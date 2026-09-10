@@ -9,6 +9,7 @@ RESOURCES="$CONTENTS/Resources"
 ICON_SOURCE="$ROOT/icon/android-chrome-512x512.png"
 ICONSET="$BUILD_DIR/AppIcon.iconset"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
+SIGNING_IDENTITY="2ED0AA003671554164365D5204DE3996AB3F9F1E"
 
 rm -rf "$APP" "$ICONSET"
 mkdir -p "$MACOS" "$RESOURCES" "$ICONSET"
@@ -39,5 +40,5 @@ xcrun swiftc \
   -framework UniformTypeIdentifiers \
   "${SOURCES[@]}" \
   -o "$MACOS/CommandTab"
-codesign --force --sign - --timestamp=none "$APP" >/dev/null
+codesign --force --sign "$SIGNING_IDENTITY" --timestamp=none "$APP" >/dev/null
 printf '%s\n' "$APP"

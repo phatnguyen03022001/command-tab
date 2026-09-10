@@ -18,30 +18,26 @@ final class SwitcherPanelController {
         return stack
     }()
 
-    private lazy var rootView: NSVisualEffectView = {
-        let root = NSVisualEffectView()
-        root.material = .hudWindow
-        root.blendingMode = .behindWindow
-        root.state = .active
+    private lazy var rootView: NSView = {
+        let root = NSView()
         root.wantsLayer = true
-        root.layer?.cornerRadius = 22
-        root.layer?.cornerCurve = .continuous
+        root.layer?.backgroundColor = NSColor.clear.cgColor
         root.addSubview(stackView)
         NSLayoutConstraint.activate([
-            stackView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            stackView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-            stackView.topAnchor.constraint(equalTo: root.topAnchor, constant: 14),
-            stackView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14)
+            stackView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 8),
+            stackView.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -8),
+            stackView.topAnchor.constraint(equalTo: root.topAnchor, constant: 8),
+            stackView.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -8)
         ])
         return root
     }()
 
     var isVisible: Bool { panel?.isVisible == true }
 
-    func show(windows: [WindowModel], selectedIndex: Int, sessionID: Int) {
+    func show(windows: [WindowModel], selectedIndex: Int, sessionID: Int, mode: SwitcherMode) {
         visibleSessionID = sessionID
         let panel = makePanelIfNeeded()
-        configureContent(windows: windows, selectedIndex: selectedIndex)
+        configureContent(windows: windows, selectedIndex: selectedIndex, mode: mode)
         position(panel: panel, itemCount: windows.count, contextDisplayID: windows.first?.displayID)
         panel.orderFrontRegardless()
     }
@@ -69,7 +65,7 @@ final class SwitcherPanelController {
         newPanel.isOpaque = false
         newPanel.backgroundColor = .clear
         newPanel.level = .modalPanel
-        newPanel.hasShadow = true
+        newPanel.hasShadow = false
         newPanel.hidesOnDeactivate = false
         newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         newPanel.contentView = rootView
@@ -77,15 +73,15 @@ final class SwitcherPanelController {
         return newPanel
     }
 
-    private func configureContent(windows: [WindowModel], selectedIndex: Int) {
+    private func configureContent(windows: [WindowModel], selectedIndex: Int, mode: SwitcherMode) {
         for (index, window) in windows.enumerated() {
             let item: SwitcherItemView
             let icon = icon(for: window)
             if index < itemViews.count {
                 item = itemViews[index]
-                item.configure(window: window, icon: icon)
+                item.configure(window: window, icon: icon, mode: mode)
             } else {
-                item = SwitcherItemView(window: window, icon: icon)
+                item = SwitcherItemView(window: window, icon: icon, mode: mode)
                 itemViews.append(item)
                 stackView.addArrangedSubview(item)
             }
@@ -122,8 +118,8 @@ final class SwitcherPanelController {
             return number.uint32Value == contextDisplayID
         } ?? NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let width = min(CGFloat(max(1, itemCount)) * 124 + 32, visibleFrame.width * 0.86)
-        let height: CGFloat = 122
+        let width = min(CGFloat(max(1, itemCount)) * 124 + 16, visibleFrame.width * 0.86)
+        let height: CGFloat = 98
         let frame = NSRect(
             x: visibleFrame.midX - width / 2,
             y: visibleFrame.midY - height / 2,

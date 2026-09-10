@@ -55,4 +55,15 @@ if ! grep -q 'keyboardEventAutorepeat' "$HOTKEY"; then
   exit 1
 fi
 
+BUILD_SCRIPT="$ROOT/build.sh"
+SIGNING_SHA='2ED0AA003671554164365D5204DE3996AB3F9F1E'
+if ! grep -q "$SIGNING_SHA" "$BUILD_SCRIPT"; then
+  echo 'FAIL: release build must use the stable Apple Development signing identity' >&2
+  exit 1
+fi
+if grep -q -- '--sign -' "$BUILD_SCRIPT"; then
+  echo 'FAIL: ad-hoc application signing must not be used' >&2
+  exit 1
+fi
+
 print 'SourcePolicyTests passed'

@@ -131,7 +131,13 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
         guard ensureSessionContextCurrent() else { return }
         guard !windows.isEmpty else { return }
         let start = DispatchTime.now().uptimeNanoseconds
-        switcher.show(windows: windows, selectedIndex: selectedIndex, sessionID: sessionID)
+        guard let snapshot else { return }
+        switcher.show(
+            windows: windows,
+            selectedIndex: selectedIndex,
+            sessionID: sessionID,
+            mode: snapshot.switcherMode
+        )
         let elapsedMs = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
         Log.input.notice("Switcher rendered in \(elapsedMs, privacy: .public) ms")
     }

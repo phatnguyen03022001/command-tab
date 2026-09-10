@@ -57,6 +57,18 @@ enum DisplayScope: String, CaseIterable {
     }
 }
 
+enum SwitcherMode: String, CaseIterable {
+    case applications
+    case windows
+
+    var title: String {
+        switch self {
+        case .applications: return "Applications"
+        case .windows: return "Windows"
+        }
+    }
+}
+
 final class CommandTabSettings {
     static let shared = CommandTabSettings()
 
@@ -65,17 +77,20 @@ final class CommandTabSettings {
         static let appearance = "appearance"
         static let revealDelay = "revealDelay"
         static let displayScope = "displayScope"
+        static let switcherMode = "switcherMode"
     }
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     var onChange: (() -> Void)?
 
-    private init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         defaults.register(defaults: [
             Key.showMenuBarIcon: true,
             Key.appearance: AppearanceMode.system.rawValue,
             Key.revealDelay: RevealDelay.ms80.rawValue,
-            Key.displayScope: DisplayScope.allVisible.rawValue
+            Key.displayScope: DisplayScope.allVisible.rawValue,
+            Key.switcherMode: SwitcherMode.applications.rawValue
         ])
     }
 
@@ -97,6 +112,11 @@ final class CommandTabSettings {
     var displayScope: DisplayScope {
         get { DisplayScope(rawValue: defaults.string(forKey: Key.displayScope) ?? "") ?? .allVisible }
         set { defaults.set(newValue.rawValue, forKey: Key.displayScope); onChange?() }
+    }
+
+    var switcherMode: SwitcherMode {
+        get { SwitcherMode(rawValue: defaults.string(forKey: Key.switcherMode) ?? "") ?? .applications }
+        set { defaults.set(newValue.rawValue, forKey: Key.switcherMode); onChange?() }
     }
 
     func applyAppearance() {

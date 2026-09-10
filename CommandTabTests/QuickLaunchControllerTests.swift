@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 private final class StubAssignments: QuickLaunchAssignmentProviding {
     var values: [Int: QuickLaunchAssignment] = [:]
@@ -62,15 +63,30 @@ struct QuickLaunchControllerTests {
         assignments.values[1] = nil
         require(!controller.handle(slot: 1, isRepeat: false), "cleared assignment must pass through")
 
-        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 18, commandDown: true, switcherActive: false) == 1,
-                "Command-1 must map to slot 1")
-        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 25, commandDown: true, switcherActive: false) == 9,
-                "Command-9 must map to slot 9")
-        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 48, commandDown: true, switcherActive: false) == nil,
+        let command: CGEventFlags = [.maskCommand]
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: command, switcherActive: false) == 3,
+                "Command-3 must map to slot 3")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 21, flags: command, switcherActive: false) == 4,
+                "Command-4 must map to slot 4")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskShift], switcherActive: false) == nil,
+                "Command-Shift-3 must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 21, flags: [.maskCommand, .maskShift], switcherActive: false) == nil,
+                "Command-Shift-4 must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskAlternate], switcherActive: false) == nil,
+                "Command-Option-3 must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskControl], switcherActive: false) == nil,
+                "Command-Control-3 must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskSecondaryFn], switcherActive: false) == nil,
+                "Command-Fn-3 must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskAlphaShift], switcherActive: false) == 3,
+                "Caps Lock must not block Command-3")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [.maskCommand, .maskNumericPad, .maskNonCoalesced], switcherActive: false) == 3,
+                "unrelated event-state flags must not block Command-3")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: [], switcherActive: false) == nil,
+                "digit without Command must pass through")
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 48, flags: command, switcherActive: false) == nil,
                 "Command-Tab must remain outside quick launch")
-        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 18, commandDown: false, switcherActive: false) == nil,
-                "number without Command must pass through")
-        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 18, commandDown: true, switcherActive: true) == nil,
+        require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: command, switcherActive: true) == nil,
                 "active switcher session must suppress quick launch handling")
 
         print("QuickLaunchControllerTests passed")

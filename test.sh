@@ -63,12 +63,25 @@ run_test AppDedupePolicyTests \
   "$ROOT/CommandTab/Windows/SpaceIdentityPolicy.swift" \
   "$ROOT/CommandTabTests/AppDedupePolicyTests.swift"
 
+run_test SwitcherModeSettingsTests \
+  "$ROOT/CommandTab/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTabTests/SwitcherModeSettingsTests.swift"
+
 run_test SwitcherReuseTests \
+  "$ROOT/CommandTab/Settings/CommandTabSettings.swift" \
   "$ROOT/CommandTab/Windows/WindowModel.swift" \
   "$ROOT/CommandTab/Windows/DisplayResolver.swift" \
   "$ROOT/CommandTab/Switcher/SwitcherItemView.swift" \
   "$ROOT/CommandTab/Switcher/SwitcherPanelController.swift" \
   "$ROOT/CommandTabTests/SwitcherReuseTests.swift"
+
+run_test SwitcherPresentationTests \
+  "$ROOT/CommandTab/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTab/Windows/WindowModel.swift" \
+  "$ROOT/CommandTab/Windows/DisplayResolver.swift" \
+  "$ROOT/CommandTab/Switcher/SwitcherItemView.swift" \
+  "$ROOT/CommandTab/Switcher/SwitcherPanelController.swift" \
+  "$ROOT/CommandTabTests/SwitcherPresentationTests.swift"
 
 run_test WindowSpaceSnapshotLiveTests \
   "$ROOT/CommandTab/Support/Logger.swift" \
@@ -98,6 +111,15 @@ run_test QuickLaunchApplicationResolverTests \
   "$ROOT/CommandTab/QuickLaunch/QuickLaunchController.swift" \
   "$ROOT/CommandTab/QuickLaunch/QuickLaunchApplicationService.swift" \
   "$ROOT/CommandTabTests/QuickLaunchApplicationResolverTests.swift"
+
+run_test SettingsLayoutTests \
+  "$ROOT/CommandTab/Support/Logger.swift" \
+  "$ROOT/CommandTab/Support/AccessibilityPermission.swift" \
+  "$ROOT/CommandTab/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTab/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/Settings/QuickLaunchSettingsView.swift" \
+  "$ROOT/CommandTab/Settings/SettingsWindowController.swift" \
+  "$ROOT/CommandTabTests/SettingsLayoutTests.swift"
 
 chmod +x "$ROOT/CommandTabTests/SourcePolicyTests.sh"
 "$ROOT/CommandTabTests/SourcePolicyTests.sh"

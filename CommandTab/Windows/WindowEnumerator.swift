@@ -5,6 +5,7 @@ struct WindowSessionSnapshot {
     let visibleSpaceContext: VisibleSpaceContext
     let displayScope: DisplayScope
     let activeDisplayID: CGDirectDisplayID?
+    let switcherMode: SwitcherMode
     let windows: [WindowModel]
     let currentSpaceLatencyMs: Double
     let membershipLatencyMs: Double
@@ -19,6 +20,7 @@ final class WindowEnumerator {
     }
 
     func currentSnapshot(settings: CommandTabSettings) -> WindowSessionSnapshot? {
+        let switcherMode = settings.switcherMode
         let totalStart = DispatchTime.now().uptimeNanoseconds
         let displays = DisplayResolver.activeDisplayIDs()
 
@@ -76,12 +78,14 @@ final class WindowEnumerator {
             scope: settings.displayScope,
             activeDisplayID: activeDisplayID
         )
+        let modeItems = SwitcherModePolicy.items(from: eligible, mode: switcherMode)
 
         return WindowSessionSnapshot(
             visibleSpaceContext: context,
             displayScope: settings.displayScope,
             activeDisplayID: activeDisplayID,
-            windows: eligible,
+            switcherMode: switcherMode,
+            windows: modeItems,
             currentSpaceLatencyMs: currentSpaceLatencyMs,
             membershipLatencyMs: membershipLatencyMs,
             totalLatencyMs: elapsedMs(since: totalStart)
