@@ -1,0 +1,8 @@
+Application icon artwork supplied by the repository operator.
+
+The prepared raster artwork was generated using the Lemon typeface.
+Font source: https://fonts.gstatic.com/s/lemon/v19/HI_EiYEVKqRMq0jBSZXAQ4-d.ttf
+Typeface project: https://github.com/etunni/lemon
+Typeface license: SIL Open Font License 1.1 (OFL-1.1).
+
+No font binary is distributed by Command Tab; the repository contains only the prepared raster icon representations.
