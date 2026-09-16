@@ -126,12 +126,14 @@ final class SettingsWindowController: NSWindowController {
         ]))
 
         stack.addArrangedSubview(section(title: "Quick Launch", views: [quickLaunchView]))
+        quickLaunchView.leadingAnchor.constraint(equalTo: stack.leadingAnchor).isActive = true
+        quickLaunchView.trailingAnchor.constraint(equalTo: stack.trailingAnchor).isActive = true
 
         permissionLabel.lineBreakMode = .byWordWrapping
-        permissionLabel.maximumNumberOfLines = 3
-        permissionLabel.preferredMaxLayoutWidth = 440
+        permissionLabel.maximumNumberOfLines = 0
         permissionLabel.font = .systemFont(ofSize: 12)
         permissionLabel.textColor = .secondaryLabelColor
+        permissionLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let permissionButton = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibility))
         permissionButton.controlSize = .regular
         permissionButton.bezelStyle = .rounded
@@ -161,8 +163,8 @@ final class SettingsWindowController: NSWindowController {
         subtitle.font = .systemFont(ofSize: 12)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byWordWrapping
-        subtitle.maximumNumberOfLines = 2
-        subtitle.preferredMaxLayoutWidth = 440
+        subtitle.maximumNumberOfLines = 0
+        subtitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let stack = NSStackView(views: [title, subtitle])
         stack.orientation = .vertical
@@ -205,7 +207,6 @@ final class SettingsWindowController: NSWindowController {
         text.alignment = .right
         text.widthAnchor.constraint(equalToConstant: 138).isActive = true
         control.widthAnchor.constraint(equalToConstant: 244).isActive = true
-        row.widthAnchor.constraint(equalToConstant: 394).isActive = true
         row.addArrangedSubview(text)
         row.addArrangedSubview(control)
         return row

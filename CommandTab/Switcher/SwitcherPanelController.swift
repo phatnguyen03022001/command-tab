@@ -116,7 +116,9 @@ final class SwitcherPanelController {
             return number.uint32Value == contextDisplayID
         } ?? NSScreen.main ?? NSScreen.screens.first
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let width = min(CGFloat(max(1, itemCount)) * 114 + 20, visibleFrame.width * 0.86)
+        let count = max(1, itemCount)
+        let contentWidth = CGFloat(count) * 108 + CGFloat(count - 1) * 6 + 20
+        let width = min(contentWidth, visibleFrame.width * 0.86)
         let height: CGFloat = 96
         let frame = NSRect(
             x: visibleFrame.midX - width / 2,

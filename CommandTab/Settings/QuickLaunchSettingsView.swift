@@ -21,6 +21,8 @@ final class QuickLaunchSettingsView: NSStackView {
             )
             rows[slot] = row
             addArrangedSubview(row)
+            row.leadingAnchor.constraint(equalTo: leadingAnchor).isActive = true
+            row.trailingAnchor.constraint(equalTo: trailingAnchor).isActive = true
         }
         refresh()
     }
@@ -107,7 +109,9 @@ private final class QuickLaunchSlotRowView: NSStackView {
 
         nameLabel.font = .systemFont(ofSize: 13)
         nameLabel.lineBreakMode = .byTruncatingMiddle
-        nameLabel.widthAnchor.constraint(equalToConstant: 202).isActive = true
+        nameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
 
         [chooseButton, clearButton].forEach { button in
             button.controlSize = .small
@@ -116,6 +120,8 @@ private final class QuickLaunchSlotRowView: NSStackView {
         }
         chooseButton.widthAnchor.constraint(equalToConstant: 82).isActive = true
         clearButton.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        chooseButton.setContentHuggingPriority(.required, for: .horizontal)
+        clearButton.setContentHuggingPriority(.required, for: .horizontal)
         heightAnchor.constraint(equalToConstant: 28).isActive = true
 
         addArrangedSubview(shortcutLabel)

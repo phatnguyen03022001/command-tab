@@ -45,8 +45,8 @@ final class SwitcherItemView: NSView {
             heightAnchor.constraint(equalToConstant: 76),
             imageView.widthAnchor.constraint(equalToConstant: 40),
             imageView.heightAnchor.constraint(equalToConstant: 40),
-            appNameLabel.widthAnchor.constraint(equalToConstant: 92),
-            windowTitleLabel.widthAnchor.constraint(equalToConstant: 98),
+            appNameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
+            windowTitleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor)

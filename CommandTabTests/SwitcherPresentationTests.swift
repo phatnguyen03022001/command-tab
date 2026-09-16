@@ -156,6 +156,14 @@ struct SwitcherPresentationTests {
         require(abs(border.red - separator.red) < 0.05 && abs(border.green - separator.green) < 0.05 && abs(border.blue - separator.blue) < 0.05,
                 "shared switcher border must derive from semantic separator color")
         require(panel?.hasShadow == true, "shared native switcher panel must use native panel shadow")
+        require(panel?.frame.width == 128, "single-item panel width must be exactly 128")
+
+        controller.show(windows: [window(), window()], selectedIndex: 0, sessionID: 100, mode: .applications)
+        require(panel?.frame.width == 242, "two-item panel width must be exactly 242")
+
+        controller.show(windows: [window(), window(), window()], selectedIndex: 0, sessionID: 101, mode: .applications)
+        require(panel?.frame.width == 356, "three-item panel width must be exactly 356")
+
         controller.close()
         print("SwitcherPresentationTests passed")
     }

@@ -57,6 +57,22 @@ struct SettingsLayoutTests {
         require(document.bounds.contains(buttonRect), "Accessibility action must lie within document bounds")
         require(document.frame.height >= scroll.contentView.bounds.height, "document must cover the viewport")
 
+        window.setContentSize(NSSize(width: 480, height: 440))
+        window.layoutIfNeeded()
+        document.layoutSubtreeIfNeeded()
+        let minDocumentWidth = document.bounds.width
+        let quickLaunch = views.compactMap { $0 as? QuickLaunchSettingsView }.first
+        require(quickLaunch != nil, "QuickLaunchSettingsView must exist")
+        let quickRect = quickLaunch!.convert(quickLaunch!.bounds, to: document)
+        require(quickRect.maxX <= minDocumentWidth + 1.0, "QuickLaunch view must fit within document bounds at minimum size")
+
+        window.setContentSize(NSSize(width: 620, height: 700))
+        window.layoutIfNeeded()
+        document.layoutSubtreeIfNeeded()
+        let expandedDocumentWidth = document.bounds.width
+        let expandedQuickRect = quickLaunch!.convert(quickLaunch!.bounds, to: document)
+        require(expandedQuickRect.maxX <= expandedDocumentWidth + 1.0, "QuickLaunch view must fit within document bounds when expanded")
+
         let visibleHeight = NSScreen.main?.visibleFrame.height ?? 800
         require(window.frame.height <= visibleHeight - 32, "settings window must clamp to screen visible height")
         print("SettingsLayoutTests passed")
