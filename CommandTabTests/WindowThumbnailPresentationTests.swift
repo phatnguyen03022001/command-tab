@@ -63,6 +63,18 @@ struct WindowThumbnailPresentationTests {
                 bundleIdentifier: nil, appName: "Ảnh", title: "", frame: .zero,
                 displayID: nil, iconKey: "pid:1")), "unknown bundle identity must not permit a thumbnail")
         require(WindowThumbnailPolicy.mayCapture(window()), "verified non-Photos app can show a thumbnail")
+        require(WindowThumbnailPolicy.mayCapture(
+            window(), captureProcessID: getpid(), captureBundleIdentifier: "com.microsoft.VSCode"
+        ), "matching ScreenCaptureKit owner permits capture")
+        require(!WindowThumbnailPolicy.mayCapture(
+            window(), captureProcessID: getpid() + 1, captureBundleIdentifier: "com.microsoft.VSCode"
+        ), "stale or reused window ID with different PID must not be captured")
+        require(!WindowThumbnailPolicy.mayCapture(
+            window(), captureProcessID: getpid(), captureBundleIdentifier: "com.apple.Photos"
+        ), "unexpected Photos ownership must never be captured")
+        require(!WindowThumbnailPolicy.mayCapture(
+            window(), captureProcessID: getpid(), captureBundleIdentifier: ""
+        ), "unknown ScreenCaptureKit bundle identity must fail closed")
         let metrics = SwitcherLayoutResolver.resolve(
             itemCount: 6, visibleWidth: 1512,
             preferredIconSize: 96, preferredSpacing: 24, mode: .windows

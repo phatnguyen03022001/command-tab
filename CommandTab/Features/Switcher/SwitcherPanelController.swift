@@ -210,7 +210,12 @@ final class SwitcherPanelController {
             let available = Dictionary(content.windows.map { ($0.windowID, $0) }, uniquingKeysWith: { first, _ in first })
             for (index, target) in allowed.prefix(16) {
                 guard !Task.isCancelled else { return }
-                guard let shareable = available[target.id] else { continue }
+                guard let shareable = available[target.id],
+                      let owner = shareable.owningApplication,
+                      WindowThumbnailPolicy.mayCapture(
+                          target, captureProcessID: owner.processID,
+                          captureBundleIdentifier: owner.bundleIdentifier
+                      ) else { continue }
                 let config = SCStreamConfiguration()
                 config.width = 256
                 config.height = max(96, min(256, Int(256 * target.frame.height / max(1, target.frame.width))))
@@ -445,6 +450,18 @@ enum WindowThumbnailPolicy {
         // Unknown bundle identity cannot prove a window is safe to screenshot.
         guard let bundleID = window.bundleIdentifier else { return false }
         return bundleID.caseInsensitiveCompare("com.apple.Photos") != .orderedSame
+    }
+
+    // ScreenCaptureKit metadata must still identify the snapshotted PID and app.
+    // A WindowServer ID match alone is insufficient to authorize a later capture.
+    static func mayCapture(
+        _ window: WindowModel,
+        captureProcessID: pid_t,
+        captureBundleIdentifier: String
+    ) -> Bool {
+        guard mayCapture(window), let expectedID = window.bundleIdentifier else { return false }
+        return window.pid == captureProcessID
+            && expectedID.caseInsensitiveCompare(captureBundleIdentifier) == .orderedSame
     }
 }
 

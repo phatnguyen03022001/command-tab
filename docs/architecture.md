@@ -62,7 +62,7 @@ Before focus, Command Tab verifies that the session's display-to-Space mapping i
 
 The owning application's AX windows are mapped to exact `CGWindowID` values. Exactly one AX element must match the representative. Focus raises that window, sets focused/main AX state where available, and activates the application without `.activateAllWindows`.
 
-Any missing, ambiguous, stale, or changed identity fails closed.
+Any missing, ambiguous, stale, or changed identity fails closed. Window thumbnails have a separate capture-time ownership check: `SCWindow.owningApplication` PID and bundle ID must match the earlier WindowServer snapshot, even when the window ID matches; unknown owners or Photos are excluded.
 ## Session consistency
 
 A session captures one immutable `WindowSessionSnapshot`. Current-Space context is revalidated while an active session is used and immediately before final focus. If the mapping changes, the session is invalidated rather than rebuilt around a different target.
@@ -106,6 +106,7 @@ Regression and live diagnostic probes live under `CommandTabTests/`. They may ob
 - Follow the [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/) for clear, role-based naming and value semantics.
 - Use the [official Swift 6 migration guide](https://www.swift.org/migration/) when deliberately changing compiler concurrency settings; production currently builds in Swift 5 language mode, so do not silently switch language modes or add actors to synchronous AppKit paths.
 - Optional, read-only ECC guidance: `rules/swift/{coding-style,patterns,testing,security}.md`, `skills/swift-protocol-di-testing/SKILL.md`, and `skills/swift-concurrency-6-2/SKILL.md` in the upstream ECC checkout. Apply only relevant guidance; do not vendor skill copies into this project.
-- Run `./test.sh` and a full-source Swift typecheck before claiming a safe refactor. Signing, installing, or releasing the app remains a separate, explicitly authorized operation.
+- Run `./test.sh` (live desktop probe is opt-in; release policy uses mocked offline fixtures) and a full-source Swift typecheck before claiming a safe refactor. `build.sh` requires explicit `SIGNING_IDENTITY`; `release.sh` requires `DEVELOPER_ID` and `NOTARY_KEYCHAIN_PROFILE`, rejects ambiguous identities, and publishes an archive only after accepted notarization, stapling, signature and Gatekeeper checks. Signing, installing and releasing remain separately authorized operations.
+- Cross-version runtime behavior (macOS 15, 26 and 27) is not established by macOS 27 SDK compilation; test exact focus, Spaces/private symbols, ScreenCaptureKit consent/Photos exclusion, input tap, menu-bar handling and glass/fallback UI on each OS before distribution.
 
 A Finder close is permitted only for an exact AX-identified window still visible in the session's allowed Space set; ordinary application quit requests still use graceful process termination. An unused foreground-app activation notification observer was removed because it performed no session work.
