@@ -1,12 +1,23 @@
 # Command Tab Architecture
 
+## Source organization
+
+Production source uses feature-first ownership with explicit operating-system boundaries:
+
+- `App/` owns application composition and shell UI.
+- `Features/Switcher/`, `Features/QuickLaunch/`, and `Features/Settings/` own feature orchestration, UI, and feature-local state. Switcher owns mode selection and PID deduplication; Settings owns persisted preferences and display labels. The presentation root and fallback view live in `SwitcherPresentationRootView.swift`.
+- `System/Input/`, `System/Windowing/`, and `System/Accessibility/` isolate macOS adapters and platform-facing behavior shared by features. Windowing owns display-scope semantics and OS-filtered snapshots, never persisted settings or Switcher selection policy.
+- `Diagnostics/` contains diagnostics-only infrastructure.
+
+Keep the app as one target unless a real reuse or build-boundary need appears. Prefer feature ownership over file-type or catch-all directories; do not recreate generic `Input/`, `Windows/`, or `Support/` top-level buckets.
+
 ## Runtime model
 
 Command Tab is a single-process `LSUIElement` AppKit application. It has no helper daemon, IPC service, network client, database, persistent Space state, or background Space polling loop.
 
-A switch session is immutable: input creates one authoritative window/Space snapshot, navigation uses that frozen item list, and stale identity or Space context cancels rather than retargeting.
+A switch session starts with one authoritative window/Space snapshot. Navigation uses that frozen item list; an explicit application termination or exact Finder window close is the only supported bounded reconciliation. Stale identity or Space context cancels instead of retargeting.
 
-The single existing `HotKeyEventTap` routes input into two independent paths:
+The single existing `HotKeyEventTap` routes input into two independent paths. `AppDelegate` composes Quick Launch shortcut selection and handling through a callback, keeping the low-level input adapter independent of the Quick Launch feature:
 
 `⌘Tab → SwitchSessionController`
 
@@ -18,11 +29,11 @@ Quick Launch is disabled while a switcher session is active. It does not enumera
 
 Production selection follows this order exactly:
 
-`CGWindowID → exact Space membership → visible Space intersection → PID grouping → representative CGWindowID → exact AX identity → focus`
+`CGWindowID → exact Space membership → visible Space intersection → optional PID grouping (Applications mode) → representative CGWindowID → exact AX identity → focus`
 
-`WindowEnumerator` obtains WindowServer z-order with `CGWindowListCopyWindowInfo(.optionOnScreenOnly, .excludeDesktopElements)`, applies eligibility rules, resolves exact Space membership for each candidate, intersects against the currently visible Space set, and only then deduplicates by PID.
+`WindowEnumerator` obtains WindowServer z-order with `CGWindowListCopyWindowInfo(.optionOnScreenOnly, .excludeDesktopElements)`, applies OS eligibility rules, resolves exact Space membership for each candidate and intersects against the currently visible Space set. It returns a WindowServer-ordered `WindowSessionSnapshot` without reading application settings or selecting a mode. `SwitchSessionController` passes the configured display scope, then applies feature-owned `SwitcherModePolicy` / `ApplicationWindowDedupePolicy`. Only Applications mode deduplicates by PID, and only after exact Space filtering.
 
-One running application instance (PID) therefore produces one switcher item in the selected visible Desktop context. The representative is the first eligible window for that PID in the existing WindowServer order. There is no title, frame, or `CGWindowID` sorting.
+In Applications mode, one running application instance (PID) produces one switcher item in the selected visible Desktop context. The representative is the first eligible window for that PID in the existing WindowServer order. There is no title, frame, or `CGWindowID` sorting.
 
 If the representative disappears or becomes invalid, the operation fails closed. Another same-PID window is not substituted.
 
@@ -60,9 +71,19 @@ There is no continuous Space tracker or background polling.
 
 ## Switcher UI
 
-The UI reuses a single AppKit hierarchy:
+The UI reuses a single AppKit hierarchy across sessions:
 
-`NSPanel → NSVisualEffectView → NSStackView → SwitcherItemView pool`
+- **Modern supported path (macOS 26.0+)**:
+  `NSPanel` → `SwitcherPresentationRootView` (outer corner radius 28) containing:
+  - `backingVisualEffect` (`NSVisualEffectView`, hudWindow, behindWindow, active, inset 2pt)
+  - `smokedUnderlay` (`NSView` with neutral black alpha, inset 2pt)
+  - `NSGlassEffectView` (clear style, full material alpha, outer corner radius 28; interactive glass enabled where the public API is available) whose `contentView` owns the reusable content hierarchy → `NSStackView` → `SwitcherItemView` pool
+- **Compatibility path (macOS 15.0+)**:
+  `NSPanel` → `SwitcherPresentationRootView` → `SwitcherPanelFallbackRootView` (`NSVisualEffectView`, popover material, continuous corner radius 28, separator border) → reusable content hierarchy → `NSStackView` → `SwitcherItemView` pool
+
+The modern path does not fade `NSGlassEffectView` to simulate opacity. `Show Background` toggles the material as a binary surface: when off, the reusable content is temporarily reparented above the hidden glass; when on, it is restored to `NSGlassEffectView.contentView`. Darkness and Background Blur remain separate backing treatments. Clear glass uses a minimal default Darkness of 10 (3% Light / 1.8% Dark smoke alpha) for legibility; Background Blur defaults to zero.
+
+Item views in the pool configure selection highlights using container-concentric corners (`NSViewCornerConfiguration.uniformCorners(radius: .containerConcentric(12))` on macOS 27+ with continuous rounded rect fallback on earlier versions).
 
 `SwitcherItemView` instances are retained to a high-water mark and reconfigured or hidden instead of rebuilt every session. Application icons are cached by stable app key for the process lifetime.
 
@@ -79,3 +100,12 @@ The public CGEvent modifier flags expose Command as an aggregate modifier, so Qu
 ## Diagnostics
 
 Regression and live diagnostic probes live under `CommandTabTests/`. They may observe runtime identifiers and latency during tests, but those values are diagnostic only and are not persisted as product state.
+
+## Swift engineering references
+
+- Follow the [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/) for clear, role-based naming and value semantics.
+- Use the [official Swift 6 migration guide](https://www.swift.org/migration/) when deliberately changing compiler concurrency settings; production currently builds in Swift 5 language mode, so do not silently switch language modes or add actors to synchronous AppKit paths.
+- Optional, read-only ECC guidance: `rules/swift/{coding-style,patterns,testing,security}.md`, `skills/swift-protocol-di-testing/SKILL.md`, and `skills/swift-concurrency-6-2/SKILL.md` in the upstream ECC checkout. Apply only relevant guidance; do not vendor skill copies into this project.
+- Run `./test.sh` and a full-source Swift typecheck before claiming a safe refactor. Signing, installing, or releasing the app remains a separate, explicitly authorized operation.
+
+A Finder close is permitted only for an exact AX-identified window still visible in the session's allowed Space set; ordinary application quit requests still use graceful process termination. An unused foreground-app activation notification observer was removed because it performed no session work.

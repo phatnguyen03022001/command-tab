@@ -5,7 +5,6 @@ struct WindowSessionSnapshot {
     let visibleSpaceContext: VisibleSpaceContext
     let displayScope: DisplayScope
     let activeDisplayID: CGDirectDisplayID?
-    let switcherMode: SwitcherMode
     let windows: [WindowModel]
     let currentSpaceLatencyMs: Double
     let membershipLatencyMs: Double
@@ -15,12 +14,12 @@ struct WindowSessionSnapshot {
 final class WindowEnumerator {
     private let currentPID = ProcessInfo.processInfo.processIdentifier
 
-    func currentWindows(settings: CommandTabSettings) -> [WindowModel] {
-        currentSnapshot(settings: settings)?.windows ?? []
+    func currentWindows(displayScope: DisplayScope) -> [WindowModel] {
+        currentSnapshot(displayScope: displayScope)?.windows ?? []
     }
 
-    func currentSnapshot(settings: CommandTabSettings) -> WindowSessionSnapshot? {
-        let switcherMode = settings.switcherMode
+    // Return OS-filtered windows in WindowServer order; the Switcher selects presentation items.
+    func currentSnapshot(displayScope: DisplayScope) -> WindowSessionSnapshot? {
         let totalStart = DispatchTime.now().uptimeNanoseconds
         let displays = DisplayResolver.activeDisplayIDs()
 
@@ -69,23 +68,22 @@ final class WindowEnumerator {
         }
         let membershipLatencyMs = elapsedMs(since: membershipStart)
 
-        let activeDisplayID = settings.displayScope == .activeOnly
-            ? DisplayResolver.keyboardContextDisplayID(from: candidates)
+        // A visible CGWindow can be an auxiliary AX system dialog, not a user window.
+        let userWindows = WindowRoleFilter.visibleUserWindows(from: candidates)
+        let activeDisplayID = displayScope == .activeOnly
+            ? DisplayResolver.keyboardContextDisplayID(from: userWindows)
             : nil
         let eligible = WindowSpaceFilter.eligible(
-            candidates,
+            userWindows,
             context: context,
-            scope: settings.displayScope,
+            scope: displayScope,
             activeDisplayID: activeDisplayID
         )
-        let modeItems = SwitcherModePolicy.items(from: eligible, mode: switcherMode)
-
         return WindowSessionSnapshot(
             visibleSpaceContext: context,
-            displayScope: settings.displayScope,
+            displayScope: displayScope,
             activeDisplayID: activeDisplayID,
-            switcherMode: switcherMode,
-            windows: modeItems,
+            windows: eligible,
             currentSpaceLatencyMs: currentSpaceLatencyMs,
             membershipLatencyMs: membershipLatencyMs,
             totalLatencyMs: elapsedMs(since: totalStart)

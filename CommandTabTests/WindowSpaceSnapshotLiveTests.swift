@@ -13,12 +13,14 @@ struct WindowSpaceSnapshotLiveTests {
     static func main() {
         let settings = CommandTabSettings.shared
         let expectedMode = settings.switcherMode
-        guard let snapshot = WindowEnumerator().currentSnapshot(settings: settings) else {
+        guard let snapshot = WindowEnumerator().currentSnapshot(displayScope: settings.displayScope) else {
             fputs("FAIL: authoritative Space snapshot unavailable\n", stderr)
             exit(1)
         }
 
-        require(snapshot.switcherMode == expectedMode, "immutable snapshot must carry the mode read at construction")
+        let items = SwitcherModePolicy.items(from: snapshot.windows, mode: expectedMode)
+        require(items.count <= snapshot.windows.count, "mode selection must not introduce windows")
+        require(items.allSatisfy { item in snapshot.windows.contains(item) }, "selection must use the captured OS snapshot")
         require(!snapshot.visibleSpaceContext.visibleSpaceIDs.isEmpty, "visible Space set must not be empty")
         let permitted = snapshot.visibleSpaceContext.permittedSpaceIDs(
             scope: snapshot.displayScope,

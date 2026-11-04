@@ -7,11 +7,11 @@ struct WindowSnapshotProbe {
     static func main() {
         let settings = CommandTabSettings.shared
         let enumerator = WindowEnumerator()
-        guard let snapshot = enumerator.currentSnapshot(settings: settings) else {
+        guard let snapshot = enumerator.currentSnapshot(displayScope: settings.displayScope) else {
             fputs("FAIL: authoritative snapshot unavailable\n", stderr)
             exit(1)
         }
-        print("eligible_window_count=\(snapshot.windows.count)")
+        print("eligible_window_count=\(SwitcherModePolicy.items(from: snapshot.windows, mode: settings.switcherMode).count)")
         print(String(format: "current_space_latency_ms=%.3f", snapshot.currentSpaceLatencyMs))
         print(String(format: "membership_latency_ms=%.3f", snapshot.membershipLatencyMs))
         print(String(format: "snapshot_latency_ms=%.3f", snapshot.totalLatencyMs))

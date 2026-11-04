@@ -37,6 +37,7 @@ xcrun swiftc \
   -framework ApplicationServices \
   -framework ServiceManagement \
   -framework CoreGraphics \
+  -framework ScreenCaptureKit \
   -framework UniformTypeIdentifiers \
   "${SOURCES[@]}" \
   -o "$MACOS/CommandTab"

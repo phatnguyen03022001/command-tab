@@ -34,7 +34,7 @@ struct SwitcherLatencyProbe {
         }
         let switcher = SwitcherPanelController()
         let cold = measure {
-            switcher.show(windows: windows, selectedIndex: 1, sessionID: 1)
+            switcher.show(windows: windows, selectedIndex: 1, sessionID: 1, mode: .applications)
         }
         switcher.close()
 
@@ -45,7 +45,8 @@ struct SwitcherLatencyProbe {
                 switcher.show(
                     windows: windows,
                     selectedIndex: iteration % windows.count,
-                    sessionID: iteration + 2
+                    sessionID: iteration + 2,
+                    mode: .applications
                 )
             }
             warm.append(elapsed)
@@ -53,10 +54,30 @@ struct SwitcherLatencyProbe {
         }
 
         print(String(format: "item_count=%d", windows.count))
-        print(String(format: "cold_ms=%.3f", cold))
-        print(String(format: "warm_min_ms=%.3f", warm.min() ?? 0))
-        print(String(format: "warm_p50_ms=%.3f", percentile(warm, 0.50)))
-        print(String(format: "warm_p90_ms=%.3f", percentile(warm, 0.90)))
-        print(String(format: "warm_max_ms=%.3f", warm.max() ?? 0))
+        print(String(format: "cold_show_ms=%.3f", cold))
+        print(String(format: "warm_repeated_show_min_ms=%.3f", warm.min() ?? 0))
+        print(String(format: "warm_repeated_show_p50_ms=%.3f", percentile(warm, 0.50)))
+        print(String(format: "warm_repeated_show_p90_ms=%.3f", percentile(warm, 0.90)))
+        print(String(format: "warm_repeated_show_max_ms=%.3f", warm.max() ?? 0))
+
+        // Direct navigation selection update measurement on active switcher hierarchy
+        switcher.show(windows: windows, selectedIndex: 0, sessionID: 100, mode: .applications)
+        var updates: [Double] = []
+        updates.reserveCapacity(50)
+        for iteration in 0..<50 {
+            let elapsed = measure {
+                switcher.update(
+                    selectedIndex: (iteration + 1) % windows.count,
+                    sessionID: 100
+                )
+            }
+            updates.append(elapsed)
+        }
+        switcher.close()
+
+        print(String(format: "direct_selection_update_min_ms=%.3f", updates.min() ?? 0))
+        print(String(format: "direct_selection_update_p50_ms=%.3f", percentile(updates, 0.50)))
+        print(String(format: "direct_selection_update_p90_ms=%.3f", percentile(updates, 0.90)))
+        print(String(format: "direct_selection_update_max_ms=%.3f", updates.max() ?? 0))
     }
 }

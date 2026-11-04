@@ -1,6 +1,6 @@
 # Command Tab
 
-Command Tab is a lightweight native macOS ⌘Tab switcher scoped to applications in the currently visible Desktop context.
+Command Tab is a lightweight native macOS ⌘Tab switcher scoped to applications or individual windows in the currently visible Desktop context.
 
 It exists for one narrow job: keep keyboard app switching inside the current Mission Control Desktop/Space context instead of surfacing applications represented only by windows on other Spaces.
 
@@ -12,12 +12,15 @@ It exists for one narrow job: keep keyboard app switching inside the current Mis
 - A representative that becomes stale is rejected; Command Tab does not substitute another same-PID window.
 - Focus targets the exact representative `CGWindowID` through Accessibility.
 - The switcher UI is native AppKit and reuses its panel and item views between sessions.
+- Settings offer Applications / Windows modes, display scoping, reveal timing, and AppKit appearance controls; previous saved preferences remain compatible.
+- The switcher never terminates Finder. A confirmed Finder window can be closed only by exact identity in an authorized Space; unknown process identity fails closed.
+- Command-Tab passes through when a valid switch session cannot be started. Exact-window focus is only reported when the selected window is verified as focused.
 
 ## Quick Launch
 
 Command Tab also provides nine configurable application shortcuts: `⌘1` through `⌘9`. Assignments are managed in Settings with the native macOS application picker. A configured slot launches or activates that app and consumes the shortcut; an unconfigured or invalid slot passes the original shortcut through to the foreground application.
 
-Quick Launch uses `NSWorkspace` / `NSRunningApplication` directly. It does not use shell commands, subprocesses, application indexing, polling, networking, or additional permissions. The current event-tap API exposes Command as an aggregate modifier, so v0.2.0 does not distinguish left Command from right Command.
+Quick Launch uses `NSWorkspace` / `NSRunningApplication` directly. It does not use shell commands, subprocesses, application indexing, polling, networking, or additional permissions. The event-tap API exposes Command as an aggregate modifier, so the shortcuts do not distinguish left Command from right Command.
 
 ## Requirements
 
@@ -41,7 +44,7 @@ Command Tab installs a keyboard event tap only when Accessibility permission is 
 
 ## Privacy
 
-Command Tab has no network client, telemetry, analytics, account service, cloud dependency, screenshot capture, ScreenCaptureKit integration, or Photos access. It does not crawl arbitrary filesystem content. Runtime window focus uses macOS Accessibility APIs.
+Command Tab has no network client, telemetry, analytics, account service, or cloud dependency. In Windows mode it may capture ephemeral in-memory window thumbnails via ScreenCaptureKit, only after Screen Recording access is already granted; Photos and unknown application identities are excluded. It does not crawl arbitrary filesystem content or persist thumbnails. Runtime window focus uses macOS Accessibility APIs.
 
 ## Architecture
 

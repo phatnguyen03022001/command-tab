@@ -7,23 +7,34 @@ protocol HotKeyEventTapDelegate: AnyObject {
     func commandKeyReleased() -> Bool
     func cancelSwitcher() -> Bool
     func arrowPressed(reverse: Bool) -> Bool
+    func quitSelectedApplication() -> Bool
 }
 
 final class HotKeyEventTap {
     private weak var delegate: HotKeyEventTapDelegate?
-    private let quickLaunchController: QuickLaunchController
+    private let handleQuickLaunch: (UInt16, CGEventFlags, Bool, Bool) -> Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    var isRunning: Bool { eventTap != nil }
-
-    init(delegate: HotKeyEventTapDelegate, quickLaunchController: QuickLaunchController) {
-        self.delegate = delegate
-        self.quickLaunchController = quickLaunchController
+    var isRunning: Bool {
+        guard let tap = eventTap, let source = runLoopSource else { return false }
+        return CFMachPortIsValid(tap) && CFRunLoopContainsSource(CFRunLoopGetMain(), source, .commonModes)
     }
 
+    init(
+        delegate: HotKeyEventTapDelegate,
+        handleQuickLaunch: @escaping (UInt16, CGEventFlags, Bool, Bool) -> Bool
+    ) {
+        self.delegate = delegate
+        self.handleQuickLaunch = handleQuickLaunch
+    }
+
+    deinit { stop() }
+
     func start() -> Bool {
-        guard AccessibilityPermission.isTrusted() else { return false }
+        if isRunning { return true }
+        if eventTap != nil || runLoopSource != nil { stop() }
+        guard Thread.isMainThread, AccessibilityPermission.isTrusted() else { return false }
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << CGEventType.keyUp.rawValue)
             | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -39,12 +50,27 @@ final class HotKeyEventTap {
             Log.input.error("CGEvent tap creation failed")
             return false
         }
-        eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        if let runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CFMachPortInvalidate(tap)
+            Log.input.error("CGEvent tap run-loop source creation failed")
+            return false
         }
+        let loop = CFRunLoopGetMain()
+        CFRunLoopAddSource(loop, source, .commonModes)
+        guard CFRunLoopContainsSource(loop, source, .commonModes) else {
+            CFMachPortInvalidate(tap)
+            CFRunLoopRemoveSource(loop, source, .commonModes)
+            Log.input.error("CGEvent tap run-loop registration failed")
+            return false
+        }
+        eventTap = tap
+        runLoopSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
+        guard CGEvent.tapIsEnabled(tap: tap) else {
+            stop()
+            Log.input.error("CGEvent tap could not be enabled")
+            return false
+        }
         return true
     }
 
@@ -55,12 +81,13 @@ final class HotKeyEventTap {
         }
         if let runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+            CFRunLoopSourceInvalidate(runLoopSource)
         }
         eventTap = nil
         runLoopSource = nil
     }
 
-    fileprivate func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = eventTap {
                 Log.input.error("Event tap disabled; attempting safe re-enable")
@@ -79,16 +106,11 @@ final class HotKeyEventTap {
             return delegate.commandTabPressed(reverse: shiftDown) ? nil : Unmanaged.passUnretained(event)
         }
 
-        if type == .keyDown,
-           let slot = QuickLaunchShortcutPolicy.slot(
-               forKeyCode: keyCode,
-               flags: flags,
-               switcherActive: delegate.isSwitcherSessionActive
-           ) {
+        if type == .keyDown {
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            return quickLaunchController.handle(slot: slot, isRepeat: isRepeat)
-                ? nil
-                : Unmanaged.passUnretained(event)
+            if handleQuickLaunch(keyCode, flags, delegate.isSwitcherSessionActive, isRepeat) {
+                return nil
+            }
         }
 
         if delegate.isSwitcherSessionActive {
@@ -104,6 +126,13 @@ final class HotKeyEventTap {
             if type == .keyDown, KeyCode.reverseArrows.contains(keyCode) {
                 return delegate.arrowPressed(reverse: true) ? nil : Unmanaged.passUnretained(event)
             }
+            if type == .keyDown, keyCode == KeyCode.q, commandDown {
+                let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                if !isRepeat {
+                    _ = delegate.quitSelectedApplication()
+                }
+                return nil
+            }
             if type == .keyUp, KeyCode.consumedWhileActive.contains(keyCode) {
                 return nil
             }
@@ -114,6 +143,7 @@ final class HotKeyEventTap {
 }
 
 private enum KeyCode {
+    static let q: UInt16 = 12
     static let tab: UInt16 = 48
     static let escape: UInt16 = 53
     static let left: UInt16 = 123
@@ -122,7 +152,7 @@ private enum KeyCode {
     static let up: UInt16 = 126
     static let forwardArrows: Set<UInt16> = [right, down]
     static let reverseArrows: Set<UInt16> = [left, up]
-    static let consumedWhileActive: Set<UInt16> = [tab, escape, left, right, down, up]
+    static let consumedWhileActive: Set<UInt16> = [q, tab, escape, left, right, down, up]
 }
 
 private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInfo in

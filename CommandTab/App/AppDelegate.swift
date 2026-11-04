@@ -15,7 +15,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var quickLaunchController = QuickLaunchController(settings: quickLaunchSettings)
     private lazy var eventTap = HotKeyEventTap(
         delegate: sessionController,
-        quickLaunchController: quickLaunchController
+        handleQuickLaunch: { [weak self] keyCode, flags, switcherActive, isRepeat in
+            guard let self,
+                  let slot = QuickLaunchShortcutPolicy.slot(
+                      forKeyCode: keyCode, flags: flags, switcherActive: switcherActive
+                  ) else { return false }
+            return self.quickLaunchController.handle(slot: slot, isRepeat: isRepeat)
+        }
     )
     private lazy var menuBar = MenuBarController(
         settings: settings,
@@ -36,12 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.menuBar.applyVisibility()
         }
         menuBar.applyVisibility()
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(activeApplicationDidChange),
-            name: NSWorkspace.didActivateApplicationNotification,
-            object: nil
-        )
         installEventTapIfAllowed()
         if !AccessibilityPermission.isTrusted() {
             Log.app.notice("Accessibility permission is not available; event tap not installed")
@@ -57,10 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         eventTap.stop()
-    }
-
-    @objc private func activeApplicationDidChange(_ notification: Notification) {
-        sessionController.noteFrontmostApplicationChange()
     }
 
     func installEventTapIfAllowed() {

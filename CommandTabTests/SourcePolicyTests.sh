@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/CommandTab"
-ADAPTER="$APP/Windows/SpaceIdentityAdapter.swift"
+ADAPTER="$APP/System/Windowing/SpaceIdentityAdapter.swift"
 
 if grep -R -n --include='*.swift' '\.activateAllWindows' "$APP"; then
   echo 'FAIL: activateAllWindows must be completely absent' >&2
@@ -33,7 +33,7 @@ if grep -R -n --include='*.swift' 'public-fallback\|case fallback' "$APP"; then
   exit 1
 fi
 
-HOTKEY="$APP/Input/HotKeyEventTap.swift"
+HOTKEY="$APP/System/Input/HotKeyEventTap.swift"
 
 if grep -R -n --include='*.swift' 'Process[[:space:]]*(\|NSTask\|/bin/sh\|/usr/bin/open\|open -a ' "$APP"; then
   echo 'FAIL: shell/subprocess quick-launch implementation detected' >&2
@@ -45,8 +45,13 @@ if (( $(grep -R -h --include='*.swift' 'CGEvent\.tapCreate' "$APP" | wc -l | tr 
   exit 1
 fi
 
-if ! grep -q 'QuickLaunchShortcutPolicy\.slot' "$HOTKEY"; then
-  echo 'FAIL: existing event tap is not routing quick-launch shortcuts through policy' >&2
+if ! grep -q 'QuickLaunchShortcutPolicy\.slot' "$APP/App/AppDelegate.swift"; then
+  echo 'FAIL: application composition must route Quick Launch through its shortcut policy' >&2
+  exit 1
+fi
+
+if grep -E 'QuickLaunchController|QuickLaunchShortcutPolicy' "$HOTKEY"; then
+  echo 'FAIL: System/Input must not depend directly on Quick Launch feature types' >&2
   exit 1
 fi
 

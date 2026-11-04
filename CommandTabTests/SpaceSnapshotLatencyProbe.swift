@@ -23,14 +23,14 @@ struct SpaceSnapshotLatencyProbe {
     static func main() {
         let settings = CommandTabSettings.shared
         let enumerator = WindowEnumerator()
-        guard let cold = enumerator.currentSnapshot(settings: settings) else {
+        guard let cold = enumerator.currentSnapshot(displayScope: settings.displayScope) else {
             fputs("FAIL: cold Space-aware snapshot unavailable\n", stderr)
             exit(1)
         }
         print(String(format: "cold_space_aware_snapshot=%.3fms", cold.totalLatencyMs))
         print(String(format: "cold_current_space_resolution=%.3fms", cold.currentSpaceLatencyMs))
         print(String(format: "cold_window_space_membership=%.3fms", cold.membershipLatencyMs))
-        print("cold_item_count=\(cold.windows.count)")
+        print("cold_item_count=\(SwitcherModePolicy.items(from: cold.windows, mode: settings.switcherMode).count)")
 
         var total: [Double] = []
         var currentSpace: [Double] = []
@@ -40,7 +40,7 @@ struct SpaceSnapshotLatencyProbe {
         membership.reserveCapacity(25)
 
         for _ in 0..<25 {
-            guard let snapshot = enumerator.currentSnapshot(settings: settings) else {
+            guard let snapshot = enumerator.currentSnapshot(displayScope: settings.displayScope) else {
                 fputs("FAIL: warm Space-aware snapshot unavailable\n", stderr)
                 exit(1)
             }
@@ -52,6 +52,6 @@ struct SpaceSnapshotLatencyProbe {
         describe("warm_space_aware_snapshot", total)
         describe("warm_current_space_resolution", currentSpace)
         describe("warm_window_space_membership", membership)
-        print("warm_item_count=\(enumerator.currentSnapshot(settings: settings)?.windows.count ?? -1)")
+        print("warm_item_count=\(enumerator.currentSnapshot(displayScope: settings.displayScope).map { SwitcherModePolicy.items(from: $0.windows, mode: settings.switcherMode).count } ?? -1)")
     }
 }
