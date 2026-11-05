@@ -178,6 +178,16 @@ run_test QuickLaunchApplicationResolverTests \
   "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchApplicationService.swift" \
   "$ROOT/CommandTabTests/QuickLaunchApplicationResolverTests.swift"
 
+run_test LaunchAtLoginFeedbackTests \
+  "$ROOT/CommandTab/Diagnostics/Logger.swift" \
+  "$ROOT/CommandTab/System/Accessibility/AccessibilityPermission.swift" \
+  "$ROOT/CommandTab/System/Windowing/DisplayScope.swift" \
+  "$ROOT/CommandTab/Features/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchSettingsView.swift" \
+  "$ROOT/CommandTab/Features/Settings/SettingsWindowController.swift" \
+  "$ROOT/CommandTabTests/LaunchAtLoginFeedbackTests.swift"
+
 run_test SettingsLayoutTests \
   "$ROOT/CommandTab/Diagnostics/Logger.swift" \
   "$ROOT/CommandTab/System/Accessibility/AccessibilityPermission.swift" \
@@ -219,6 +229,9 @@ run_test SwitchSessionQuitTests \
 run_test HotKeyEventRoutingTests \
   "$ROOT/CommandTab/Diagnostics/Logger.swift" \
   "$ROOT/CommandTab/System/Accessibility/AccessibilityPermission.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchController.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchApplicationService.swift" \
   "$ROOT/CommandTab/System/Input/HotKeyEventTap.swift" \
   "$ROOT/CommandTabTests/HotKeyEventRoutingTests.swift"
 

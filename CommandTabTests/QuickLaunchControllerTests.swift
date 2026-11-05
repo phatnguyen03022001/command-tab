@@ -3,7 +3,9 @@ import CoreGraphics
 
 private final class StubAssignments: QuickLaunchAssignmentProviding {
     var values: [Int: QuickLaunchAssignment] = [:]
+    var invalidSlots = Set<Int>()
     func assignment(for slot: Int) -> QuickLaunchAssignment? { values[slot] }
+    func hasAssignment(for slot: Int) -> Bool { values[slot] != nil || invalidSlots.contains(slot) }
 }
 
 private final class StubApplicationService: QuickLaunchApplicationServing {
@@ -42,7 +44,10 @@ struct QuickLaunchControllerTests {
         let assignments = StubAssignments()
         let service = StubApplicationService()
         service.resolvedURL = URL(fileURLWithPath: "/Applications/Example.app")
-        let controller = QuickLaunchController(settings: assignments, applicationService: service)
+        var failures = 0
+        let controller = QuickLaunchController(settings: assignments, applicationService: service) {
+            failures += 1
+        }
 
         require(!controller.handle(slot: 1, isRepeat: false), "empty slot must pass through")
         require(service.resolvedAssignments.isEmpty, "empty slot must not resolve an app")
@@ -55,13 +60,25 @@ struct QuickLaunchControllerTests {
 
         require(controller.handle(slot: 1, isRepeat: true), "repeat for valid configured slot must be consumed")
         require(service.launched.count == 1, "key repeat must not launch or activate again")
+        require(service.resolvedAssignments.count == 1, "key repeat must not resolve the app again")
 
         service.resolvedURL = nil
-        require(!controller.handle(slot: 1, isRepeat: false), "unresolvable assignment must pass through")
+        require(controller.handle(slot: 1, isRepeat: false), "unresolvable configured shortcut must stay owned")
+        require(failures == 1, "missing application produces one failure cue")
         require(service.launched.count == 1, "unresolvable assignment must not launch anything")
+        require(controller.handle(slot: 1, isRepeat: true), "unresolvable repeat remains owned")
+        require(failures == 1 && service.resolvedAssignments.count == 2,
+                "autorepeat must not resolve or report failure again")
 
         assignments.values[1] = nil
+        assignments.invalidSlots.insert(1)
+        require(controller.handle(slot: 1, isRepeat: false), "malformed persisted assignment must stay owned")
+        require(failures == 2, "malformed assignment produces one failure cue")
+        require(controller.handle(slot: 1, isRepeat: true), "malformed assignment repeat is owned")
+        require(failures == 2, "malformed assignment repeat must not beep again")
+        assignments.invalidSlots.remove(1)
         require(!controller.handle(slot: 1, isRepeat: false), "cleared assignment must pass through")
+        require(failures == 2, "unassigned slot never emits a failure cue")
 
         let command: CGEventFlags = [.maskCommand]
         require(QuickLaunchShortcutPolicy.slot(forKeyCode: 20, flags: command, switcherActive: false) == 3,

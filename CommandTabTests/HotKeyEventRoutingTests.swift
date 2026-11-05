@@ -39,6 +39,13 @@ private final class RoutingDelegate: HotKeyEventTapDelegate {
     }
 }
 
+private final class RoutingQuickLaunchService: QuickLaunchApplicationServing {
+    var resolvedURL: URL?
+    var launches = 0
+    func resolve(_ assignment: QuickLaunchAssignment) -> URL? { resolvedURL }
+    func launchOrActivate(_ url: URL, assignment: QuickLaunchAssignment) { launches += 1 }
+}
+
 @main
 struct HotKeyEventRoutingTests {
     static let proxy = OpaquePointer(bitPattern: 1)!
@@ -109,6 +116,10 @@ struct HotKeyEventRoutingTests {
             require(send(tap, key, command, down: false), "arrow up consumed \(key)")
         }
         require(delegate.arrows == [true, false, false, true], "arrow direction preserved")
+        require(send(tap, 124, command), "Switcher arrow starts a held navigation")
+        require(send(tap, 124, command, repeatKey: true), "Switcher arrow repeat stays owned")
+        require(send(tap, 124, command, down: false), "Switcher arrow up stays owned")
+        require(Array(delegate.arrows.suffix(2)) == [false, false], "Switcher arrow repeat still navigates")
         require(send(tap, 12, command), "Command-Q owned")
         require(send(tap, 12, command, repeatKey: true), "Command-Q repeat owned")
         require(delegate.quits == 1, "Command-Q repeats do not re-quit")
@@ -143,7 +154,64 @@ struct HotKeyEventRoutingTests {
         tap.stop()
         require(!tap.isRunning, "test does not install an event tap")
         testInterruptedInputContinuity()
+        testQuickLaunchFailureOwnership()
         print("HotKeyEventRoutingTests passed")
+    }
+
+    static func testQuickLaunchFailureOwnership() {
+        let suite = "commandtab.routing.quicklaunch.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let assignments = QuickLaunchSettings(defaults: defaults)
+        let service = RoutingQuickLaunchService()
+        var feedback = 0
+        let quickLaunch = QuickLaunchController(settings: assignments, applicationService: service) {
+            feedback += 1
+        }
+        let delegate = RoutingDelegate()
+        let tap = HotKeyEventTap(delegate: delegate) { key, flags, active, isRepeat in
+            guard let slot = QuickLaunchShortcutPolicy.slot(
+                forKeyCode: key, flags: flags, switcherActive: active
+            ) else { return false }
+            return quickLaunch.handle(slot: slot, isRepeat: isRepeat)
+        }
+        let command: CGEventFlags = [.maskCommand]
+        let shifted: CGEventFlags = [.maskCommand, .maskShift]
+        require(!send(tap, 18, command), "unconfigured Command-1 down passes through")
+        require(!send(tap, 18, command, down: false), "unconfigured Command-1 up passes through")
+
+        let assignment = QuickLaunchAssignment(bundleIdentifier: "com.example.Missing",
+            applicationURL: URL(fileURLWithPath: "/nonexistent/QuickLaunch.app"), displayName: "Missing")
+        assignments.setAssignment(assignment, for: 1)
+        require(!send(tap, 18, shifted), "invalid modifiers do not capture Command-Shift-1")
+        require(!send(tap, 18, shifted, down: false), "invalid modifiers preserve key up")
+        require(send(tap, 18, command), "missing configured app owns Command-1 down")
+        require(send(tap, 18, command, repeatKey: true), "missing app owns autorepeat")
+        require(send(tap, 18, command, down: false), "missing app owns matching key up")
+        require(feedback == 1 && service.launches == 0, "missing app beeps once without launching")
+
+        service.resolvedURL = assignment.applicationURL
+        require(send(tap, 18, command), "resolvable configured app owns Command-1")
+        require(send(tap, 18, command, repeatKey: true), "resolvable app owns repeat")
+        require(send(tap, 18, command, down: false), "resolvable app owns key up")
+        require(service.launches == 1 && feedback == 1, "resolvable app launches once without failure")
+
+        delegate.isSwitcherSessionActive = true
+        require(send(tap, 18, command), "Switcher owns Command-1 while active")
+        require(send(tap, 18, command, down: false), "Switcher owns matching key up")
+        require(service.launches == 1 && feedback == 1, "Switcher blocks Quick Launch side effects")
+        delegate.isSwitcherSessionActive = false
+
+        require(send(tap, 18, command), "configured shortcut owns initial key down")
+        assignments.clearAssignment(for: 1)
+        require(send(tap, 18, command, repeatKey: true),
+                "assignment clearing mid-press cannot leak a repeat")
+        require(send(tap, 18, command, down: false),
+                "assignment clearing mid-press cannot leak owned key up")
+        require(!send(tap, 18, command), "cleared assignment passes on next fresh key down")
+        require(!send(tap, 18, command, down: false), "cleared assignment passes matching up")
+        require(service.launches == 2 && feedback == 1, "mid-press clearing triggers no extra launch or alert")
+        tap.stop()
     }
 
     static func testInterruptedInputContinuity() {

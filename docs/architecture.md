@@ -99,7 +99,7 @@ Settings centers on first presentation; subsequent opens retain the existing pos
 
 `QuickLaunchSettings` stores at most nine local UserDefaults dictionaries keyed by slot. Each assignment contains the application path, display name, and bundle identifier when available. Bundle identifier is the primary logical identity; the stored URL is preferred when it is still a valid matching application bundle, otherwise LaunchServices resolves the current URL for that bundle identifier.
 
-`QuickLaunchApplicationService` activates an already-running application or asks `NSWorkspace` to open it. No shell command, subprocess, helper daemon, additional event tap, polling loop, filesystem crawl, or Space mutation is involved. Invalid assignments fail safe and leave the original shortcut unconsumed.
+`QuickLaunchApplicationService` activates an already-running application or asks `NSWorkspace` to open it. No shell command, subprocess, helper daemon, additional event tap, polling loop, filesystem crawl, or Space mutation is involved. Configured shortcuts stay consumed even when the target is missing or its saved record is invalid; a single asynchronous system beep signals the failed physical press without triggering a foreground-app action. Unassigned shortcuts pass through, and autorepeat never retries resolution or activation.
 
 The public CGEvent modifier flags expose Command as an aggregate modifier, so Quick Launch intentionally does not maintain fragile left/right modifier state. Both Command keys therefore share the same configured 1–9 semantics.
 

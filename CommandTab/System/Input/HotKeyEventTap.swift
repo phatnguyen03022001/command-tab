@@ -144,6 +144,13 @@ final class HotKeyEventTap {
             // Suppress Command repeats only while the Switcher owns the session.
             return delegate.isSwitcherSessionActive && commandDown ? nil : Unmanaged.passUnretained(event)
         }
+        if isRepeat && ownedKeyUps.contains(keyCode) && keyCode != KeyCode.tab &&
+            !(delegate.isSwitcherSessionActive &&
+              (KeyCode.forwardArrows.contains(keyCode) || KeyCode.reverseArrows.contains(keyCode))) {
+            // An already-consumed down owns its repeats/up even if Settings or modifiers change.
+            // Keep Switcher navigation repeats (Tab/arrows) working normally.
+            return nil
+        }
         // A previous swallowed keyUp may have been lost if the tap was disabled.
         // An unowned new down must never cause its later up to be swallowed.
         ownedKeyUps.remove(keyCode)

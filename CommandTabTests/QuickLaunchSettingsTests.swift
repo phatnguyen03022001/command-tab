@@ -25,6 +25,7 @@ struct QuickLaunchSettingsTests {
 
         require(settings.assignment(for: 1) == nil, "slots must default to unconfigured")
         require(settings.assignment(for: 9) == nil, "slot 9 must default to unconfigured")
+        require(!settings.hasAssignment(for: 1), "empty slot must pass through")
 
         let safari = assignment("Safari", bundleID: "com.apple.Safari", path: "/Applications/Safari.app")
         let code = assignment("Visual Studio Code", bundleID: "com.microsoft.VSCode", path: "/Applications/Visual Studio Code.app")
@@ -32,6 +33,7 @@ struct QuickLaunchSettingsTests {
         settings.setAssignment(code, for: 2)
         require(settings.assignment(for: 1) == safari, "slot 1 must preserve its assignment")
         require(settings.assignment(for: 2) == code, "slot 2 must remain independent")
+        require(settings.hasAssignment(for: 1), "stored assignment owns its shortcut")
 
         let safariMoved = assignment("Safari", bundleID: "com.apple.Safari", path: "/System/Applications/Safari.app")
         settings.setAssignment(safariMoved, for: 1)
@@ -41,8 +43,15 @@ struct QuickLaunchSettingsTests {
         settings.clearAssignment(for: 1)
         require(settings.assignment(for: 1) == nil, "clearing a slot must restore passthrough state")
         require(settings.assignment(for: 2) == code, "clearing slot 1 must not clear slot 2")
+        require(!settings.hasAssignment(for: 1), "cleared shortcut must pass through")
+        defaults.set(["displayName": "Corrupt"], forKey: "quickLaunch.slot.1")
+        require(settings.assignment(for: 1) == nil, "malformed record is not a valid assignment")
+        require(settings.hasAssignment(for: 1), "malformed stored assignment must still own its shortcut")
+        settings.clearAssignment(for: 1)
         require(settings.assignment(for: 0) == nil, "invalid slot 0 must be ignored")
         require(settings.assignment(for: 10) == nil, "invalid slot 10 must be ignored")
+        require(!settings.hasAssignment(for: 0) && !settings.hasAssignment(for: 10),
+                "out-of-range slots must not own shortcuts")
 
         let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let appURL = tempRoot.appendingPathComponent("Picked.app")

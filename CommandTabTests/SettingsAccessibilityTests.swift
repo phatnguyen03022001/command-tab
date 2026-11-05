@@ -91,6 +91,19 @@ struct SettingsAccessibilityTests {
         require(descendants(quickView).compactMap { $0 as? NSButton }.contains {
             $0.accessibilityLabel() == "Assign application to Command+4" && $0.isEnabled
         }, "clearing restores the initial dynamic label")
+        defaults.set(["displayName": "Damaged"], forKey: "quickLaunch.slot.4")
+        quickView.refresh()
+        let invalidButtons = descendants(quickView).compactMap { $0 as? NSButton }
+        require(invalidButtons.contains {
+            $0.accessibilityLabel() == "Change application for Command+4, currently Unavailable Assignment"
+                && $0.isEnabled
+        }, "malformed assigned slot must remain visibly configured")
+        require(invalidButtons.contains {
+            $0.accessibilityLabel() == "Clear application from Command+4, Unavailable Assignment"
+                && $0.isEnabled
+        }, "malformed assignment must be user-recoverable through Clear")
+        quick.clearAssignment(for: 4)
+        quickView.refresh()
 
         let ordinaryButtons = views.compactMap { $0 as? NSButton }
             .filter { candidate in !buttons.contains(where: { $0 === candidate }) }

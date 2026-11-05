@@ -5,6 +5,9 @@ final class SettingsWindowController: NSWindowController {
     private let quickLaunchView: QuickLaunchSettingsView
     private let retryAccessibility: () -> Void
     private let isAccessibilityTrusted: () -> Bool
+    private let isLaunchAtLoginEnabled: () -> Bool
+    private let setLaunchAtLogin: (Bool) throws -> Void
+    private let presentLaunchAtLoginFailure: (NSWindow) -> Void
     private var permissionObservers: [NSObjectProtocol] = []
     private let launchAtLoginSwitch = NSSwitch()
     private let menuBarIconSwitch = NSSwitch()
@@ -36,12 +39,25 @@ final class SettingsWindowController: NSWindowController {
         settings: CommandTabSettings,
         quickLaunchSettings: QuickLaunchSettings,
         retryAccessibility: @escaping () -> Void,
-        isAccessibilityTrusted: @escaping () -> Bool = AccessibilityPermission.isTrusted
+        isAccessibilityTrusted: @escaping () -> Bool = AccessibilityPermission.isTrusted,
+        isLaunchAtLoginEnabled: (() -> Bool)? = nil,
+        setLaunchAtLogin: ((Bool) throws -> Void)? = nil,
+        presentLaunchAtLoginFailure: ((NSWindow) -> Void)? = nil
     ) {
         self.settings = settings
         self.quickLaunchView = QuickLaunchSettingsView(settings: quickLaunchSettings)
         self.retryAccessibility = retryAccessibility
         self.isAccessibilityTrusted = isAccessibilityTrusted
+        self.isLaunchAtLoginEnabled = isLaunchAtLoginEnabled ?? { settings.launchAtLoginEnabled() }
+        self.setLaunchAtLogin = setLaunchAtLogin ?? { try settings.setLaunchAtLogin($0) }
+        self.presentLaunchAtLoginFailure = presentLaunchAtLoginFailure ?? { window in
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Couldn't Update Launch at Login"
+            alert.informativeText = "Try again, or manage Command Tab in System Settings > General > Login Items & Extensions."
+            alert.addButton(withTitle: "OK")
+            alert.beginSheetModal(for: window, completionHandler: nil)
+        }
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -681,7 +697,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func refreshControls() {
-        launchAtLoginSwitch.state = settings.launchAtLoginEnabled() ? .on : .off
+        launchAtLoginSwitch.state = isLaunchAtLoginEnabled() ? .on : .off
         menuBarIconSwitch.state = settings.showMenuBarIcon ? .on : .off
         appearancePopup.selectItem(at: AppearanceMode.allCases.firstIndex(of: settings.appearanceMode) ?? 0)
         revealPopup.selectItem(at: RevealDelay.allCases.firstIndex(of: settings.revealDelay) ?? 1)
@@ -777,11 +793,14 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func changeLaunchAtLogin() {
         do {
-            try settings.setLaunchAtLogin(launchAtLoginSwitch.state == .on)
+            try setLaunchAtLogin(launchAtLoginSwitch.state == .on)
         } catch {
             Log.settings.error("Launch at Login update failed: \(error.localizedDescription, privacy: .public)")
             refreshControls()
+            if let window { presentLaunchAtLoginFailure(window) }
+            return
         }
+        refreshControls()
     }
 
     @objc private func changeMenuBarIconVisibility() {

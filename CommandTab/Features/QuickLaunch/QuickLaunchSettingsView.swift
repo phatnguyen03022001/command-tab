@@ -75,7 +75,9 @@ final class QuickLaunchSettingsView: NSStackView {
     private func refresh(slot: Int) {
         guard let row = rows[slot] else { return }
         guard let assignment = settings.assignment(for: slot) else {
-            row.configure(name: "Not Configured", icon: nil, assigned: false)
+            let stored = settings.hasAssignment(for: slot)
+            row.configure(name: stored ? "Unavailable Assignment" : "Not Configured",
+                          icon: nil, assigned: stored)
             return
         }
         let path = assignment.applicationURL.standardizedFileURL.path
@@ -205,7 +207,8 @@ private final class QuickLaunchSlotRowView: NSStackView {
         nameLabel.stringValue = name
         nameLabel.textColor = assigned ? .labelColor : .secondaryLabelColor
         nameLabel.font = .systemFont(ofSize: 13, weight: assigned ? .medium : .regular)
-        iconView.image = icon ?? NSImage(systemSymbolName: "app.dashed", accessibilityDescription: "Unassigned")
+        iconView.image = icon ?? NSImage(systemSymbolName: "app.dashed",
+                                         accessibilityDescription: assigned ? "Unavailable application" : "Unassigned")
         iconView.contentTintColor = assigned ? nil : .secondaryLabelColor
         chooseButton.title = assigned ? "Change…" : "Assign…"
         clearButton.isEnabled = assigned

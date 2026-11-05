@@ -26,6 +26,7 @@ struct QuickLaunchAssignment: Equatable {
 
 protocol QuickLaunchAssignmentProviding: AnyObject {
     func assignment(for slot: Int) -> QuickLaunchAssignment?
+    func hasAssignment(for slot: Int) -> Bool
 }
 
 final class QuickLaunchSettings: QuickLaunchAssignmentProviding {
@@ -36,6 +37,10 @@ final class QuickLaunchSettings: QuickLaunchAssignmentProviding {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    func hasAssignment(for slot: Int) -> Bool {
+        (1...9).contains(slot) && defaults.object(forKey: key(for: slot)) != nil
     }
 
     func assignment(for slot: Int) -> QuickLaunchAssignment? {
