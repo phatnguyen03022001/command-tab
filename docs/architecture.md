@@ -85,6 +85,8 @@ The modern path does not fade `NSGlassEffectView` to simulate opacity. `Show Bac
 
 Item views in the pool configure selection highlights using container-concentric corners (`NSViewCornerConfiguration.uniformCorners(radius: .containerConcentric(12))` on macOS 27+ with continuous rounded rect fallback on earlier versions).
 
+AppKit display preferences are read from `NSWorkspace` and refreshed on `accessibilityDisplayOptionsDidChangeNotification`. Reduce Motion suppresses selected-item zoom and neighbor displacement; Reduce Transparency temporarily substitutes a semantic opaque backing for glass/material (including when the user's Show Background option is off); Increase Contrast strengthens the selection boundary and title hierarchy. The user's appearance settings are not changed. Transparent mode otherwise protects only label bounds with semantic window-background backing instead of darkening the entire panel. Windows-mode tile stacks are top-anchored so title visibility does not move icon/thumbnail baselines. A missing individual thumbnail remains hidden rather than allocating an empty preview placeholder.
+
 `SwitcherItemView` instances are retained to a high-water mark and reconfigured or hidden instead of rebuilt every session. Application icons are cached by stable app key for the process lifetime.
 
 A configurable reveal delay preserves the quick-switch path: a short ⌘Tab interaction can commit before the panel is shown, while continued navigation reveals and updates the reused panel.

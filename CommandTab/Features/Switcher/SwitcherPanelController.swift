@@ -30,6 +30,11 @@ final class SwitcherPanelController {
     private var backingVEV: NSVisualEffectView?
     private var smokedUnderlay: NSView?
     private var presentationRoot: SwitcherPresentationRootView?
+    // A closure is sufficient for deterministic tests; production reads NSWorkspace directly.
+    var displayPreferencesProvider: () -> SwitcherDisplayPreferences = { .current }
+    private var activeIconScale: CGFloat {
+        displayPreferencesProvider().reduceMotion ? 1.0 : settings.selectedIconScale
+    }
 
     private lazy var stackView: NSStackView = {
         let stack = NSStackView()
@@ -84,13 +89,24 @@ final class SwitcherPanelController {
             name: CommandTabSettings.didChangeNotification,
             object: nil
         )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(accessibilityDisplayOptionsChanged),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     @objc private func settingsDidChangeNotification() {
+        handleSettingsChanged()
+    }
+
+    @objc private func accessibilityDisplayOptionsChanged() {
         handleSettingsChanged()
     }
 
@@ -223,9 +239,10 @@ final class SwitcherPanelController {
                 itemViews.append(item)
                 stackView.addArrangedSubview(item)
             }
-            item.setBackgroundVisible(settings.showBackground)
+            item.setBackgroundVisible(settings.showBackground || displayPreferencesProvider().reduceTransparency)
+            item.setDisplayPreferences(displayPreferencesProvider())
             item.setShowAppNames(settings.showAppNames)
-            item.setSelectedIconScale(settings.selectedIconScale)
+            item.setSelectedIconScale(activeIconScale)
             item.isHidden = false
             item.isSelected = index == selectedIndex
         }
@@ -313,7 +330,7 @@ final class SwitcherPanelController {
     ) {
         currentLayout = layout
         let visibleFrame = visibleFrame(contextDisplayID: contextDisplayID)
-        let zoomHeadroom = layout.metrics.selectionPodSize * max(0, settings.selectedIconScale - 1.15) * 0.5
+        let zoomHeadroom = layout.metrics.selectionPodSize * max(0, activeIconScale - 1.15) * 0.5
         let presentationHeight = layout.metrics.panelHeight + zoomHeadroom * 2
         let frame = NSRect(
             x: visibleFrame.midX - layout.panelWidth / 2,
@@ -331,7 +348,7 @@ final class SwitcherPanelController {
     }
 
     private func applySelectionPresentation(selectedIndex: Int, itemCount: Int) {
-        let scale = settings.selectedIconScale
+        let scale = activeIconScale
         let extraHalfWidth = currentMetrics.selectionPodSize * max(0, scale - 1.0) * 0.5
         let firstNeighborPush = scale > 1.0 ? extraHalfWidth + 2.0 : 0.0
         let secondNeighborPush = firstNeighborPush * 0.40
@@ -360,7 +377,7 @@ final class SwitcherPanelController {
     private func ensureSelectionVisible(selectedIndex: Int, itemCount: Int) {
         guard let layout = currentLayout else { return }
         let currentOffset = contentViewport.bounds.origin.x
-        let scaledPodHalfWidth = layout.metrics.selectionPodSize * settings.selectedIconScale * 0.5
+        let scaledPodHalfWidth = layout.metrics.selectionPodSize * activeIconScale * 0.5
         let visualMargin = max(0, scaledPodHalfWidth - layout.metrics.itemWidth * 0.5)
         let offset = SwitcherViewportPolicy.offset(
             selectedIndex: selectedIndex,
@@ -377,18 +394,22 @@ final class SwitcherPanelController {
     private func updatePresentationProperties() {
         guard let backingVEV, let smokedUnderlay, let presentationRoot else { return }
 
+        let preferences = displayPreferencesProvider()
         let showBackground = settings.showBackground
         for item in itemViews {
-            item.setBackgroundVisible(showBackground)
+            item.setBackgroundVisible(showBackground || preferences.reduceTransparency)
+            item.setDisplayPreferences(preferences)
             item.setShowAppNames(settings.showAppNames)
         }
-        presentationRoot.setBackgroundVisible(showBackground)
+        presentationRoot.setBackgroundVisible(
+            showBackground, reduceTransparency: preferences.reduceTransparency
+        )
         presentationRoot.glassView.alphaValue = 1.0
         presentationRoot.foregroundView.alphaValue = 1.0
         panel?.alphaValue = 1.0
-        panel?.hasShadow = showBackground
+        panel?.hasShadow = showBackground || preferences.reduceTransparency
 
-        guard showBackground else {
+        guard showBackground && !preferences.reduceTransparency else {
             backingVEV.isHidden = true
             backingVEV.alphaValue = 0.0
             backingVEV.state = .inactive

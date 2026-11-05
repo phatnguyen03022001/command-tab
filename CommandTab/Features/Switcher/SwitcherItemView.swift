@@ -1,5 +1,20 @@
 import AppKit
 
+struct SwitcherDisplayPreferences: Equatable {
+    var reduceMotion = false
+    var reduceTransparency = false
+    var increaseContrast = false
+
+    static var current: Self {
+        let workspace = NSWorkspace.shared
+        return Self(
+            reduceMotion: workspace.accessibilityDisplayShouldReduceMotion,
+            reduceTransparency: workspace.accessibilityDisplayShouldReduceTransparency,
+            increaseContrast: workspace.accessibilityDisplayShouldIncreaseContrast
+        )
+    }
+}
+
 final class SwitcherItemView: NSView {
     private var selectedIconScale: CGFloat = 1.15
     private var showAppNames = true
@@ -25,6 +40,8 @@ final class SwitcherItemView: NSView {
     private var previewHeightConstraint: NSLayoutConstraint?
     private(set) var metrics: SwitcherPresentationMetrics = SwitcherPresentationMetrics()
     private var backgroundVisible = true
+    private var displayPreferences = SwitcherDisplayPreferences()
+    private var stackTopConstraint: NSLayoutConstraint?
 
     var isSelected: Bool = false {
         didSet {
@@ -85,12 +102,16 @@ final class SwitcherItemView: NSView {
         appNameLabel.maximumNumberOfLines = 1
         appNameLabel.usesSingleLineMode = true
         appNameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        appNameLabel.wantsLayer = true
+        appNameLabel.layer?.cornerRadius = 4
 
         windowTitleLabel.alignment = .center
         windowTitleLabel.lineBreakMode = .byTruncatingMiddle
         windowTitleLabel.maximumNumberOfLines = 1
         windowTitleLabel.usesSingleLineMode = true
         windowTitleLabel.font = .systemFont(ofSize: 10, weight: .regular)
+        windowTitleLabel.wantsLayer = true
+        windowTitleLabel.layer?.cornerRadius = 4
 
         let stack = NSStackView(views: [iconContainer, previewContainer, appNameLabel, windowTitleLabel])
         stack.orientation = .vertical
@@ -124,6 +145,11 @@ final class SwitcherItemView: NSView {
         self.imageHeightConstraint = imageHeightC
         self.previewWidthConstraint = previewWidthC
         self.previewHeightConstraint = previewHeightC
+        let stackTop = stack.topAnchor.constraint(
+            equalTo: topAnchor,
+            constant: Self.stackTopInset(metrics: resolvedMetrics, showAppNames: true)
+        )
+        self.stackTopConstraint = stackTop
 
         NSLayoutConstraint.activate([
             widthC,
@@ -144,7 +170,8 @@ final class SwitcherItemView: NSView {
             windowTitleLabel.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -4),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor)
+            stackTop,
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)
         ])
 
         selectionBackgroundView.layer?.cornerRadius = round(resolvedMetrics.selectionPodSize * 0.30)
@@ -159,6 +186,12 @@ final class SwitcherItemView: NSView {
     func setBackgroundVisible(_ visible: Bool) {
         guard backgroundVisible != visible else { return }
         backgroundVisible = visible
+        updateSelection()
+    }
+
+    func setDisplayPreferences(_ preferences: SwitcherDisplayPreferences) {
+        guard displayPreferences != preferences else { return }
+        displayPreferences = preferences
         updateSelection()
     }
 
@@ -198,6 +231,7 @@ final class SwitcherItemView: NSView {
         previewWidthConstraint?.constant = newMetrics.previewWidth
         previewHeightConstraint?.constant = newMetrics.previewHeight
         selectionBackgroundView.layer?.cornerRadius = round(newMetrics.selectionPodSize * 0.30)
+        updateStackTopInset()
         applySelectionScale()
         needsLayout = true
     }
@@ -240,6 +274,18 @@ final class SwitcherItemView: NSView {
     private func applyLabelVisibility() {
         appNameLabel.isHidden = !showAppNames
         windowTitleLabel.isHidden = currentMode != .windows || windowTitleLabel.stringValue.isEmpty
+        updateStackTopInset()
+    }
+
+    private static func stackTopInset(metrics: SwitcherPresentationMetrics, showAppNames: Bool) -> CGFloat {
+        if metrics.mode == .applications {
+            return showAppNames ? 12 : (metrics.itemHeight - metrics.selectionPodSize) / 2
+        }
+        return metrics.previewWidth > 0 ? 0 : 4
+    }
+
+    private func updateStackTopInset() {
+        stackTopConstraint?.constant = Self.stackTopInset(metrics: metrics, showAppNames: showAppNames)
     }
 
     private static func meaningfulWindowTitle(_ title: String, appName: String) -> String? {
@@ -268,16 +314,11 @@ final class SwitcherItemView: NSView {
         effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    private var opaquePrimaryTextColor: NSColor {
-        usesDarkAppearance
-            ? NSColor(calibratedWhite: 1.0, alpha: 1.0)
-            : NSColor(calibratedWhite: 0.08, alpha: 1.0)
-    }
+    private var primaryTextColor: NSColor { NSColor.labelColor.withAlphaComponent(1) }
 
-    private var opaqueSecondaryTextColor: NSColor {
-        usesDarkAppearance
-            ? NSColor(calibratedWhite: 0.72, alpha: 1.0)
-            : NSColor(calibratedWhite: 0.38, alpha: 1.0)
+    private var secondaryTextColor: NSColor {
+        (displayPreferences.increaseContrast ? NSColor.labelColor : .secondaryLabelColor)
+            .withAlphaComponent(1)
     }
 
     private func applySelectionScale() {
@@ -296,20 +337,22 @@ final class SwitcherItemView: NSView {
         CATransaction.setDisableActions(true)
         if isSelected {
             let neutralFill = usesDarkAppearance
-                ? NSColor(calibratedWhite: 1.0, alpha: 0.11)
-                : NSColor(calibratedWhite: 0.0, alpha: 0.07)
+                ? NSColor(calibratedWhite: 1.0, alpha: displayPreferences.increaseContrast ? 0.24 : 0.11)
+                : NSColor(calibratedWhite: 0.0, alpha: displayPreferences.increaseContrast ? 0.20 : 0.07)
             layer?.backgroundColor = resolvedCGColor(.clear)
             selectionBackgroundView.layer?.backgroundColor = resolvedCGColor(neutralFill)
-            selectionBackgroundView.layer?.borderWidth = 1.0
-            selectionBackgroundView.layer?.borderColor = resolvedCGColor(NSColor.white.withAlphaComponent(0.24))
+            selectionBackgroundView.layer?.borderWidth = displayPreferences.increaseContrast ? 2.0 : 1.0
+            selectionBackgroundView.layer?.borderColor = resolvedCGColor(
+                displayPreferences.increaseContrast ? .labelColor : NSColor.white.withAlphaComponent(0.24)
+            )
             selectionBackgroundView.layer?.shadowColor = resolvedCGColor(.black)
             selectionBackgroundView.layer?.shadowOpacity = 0.30
             selectionBackgroundView.layer?.shadowRadius = 2.0
             selectionBackgroundView.layer?.shadowOffset = .zero
             selectionBackgroundView.layer?.transform = CATransform3DIdentity
             appNameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-            appNameLabel.textColor = opaquePrimaryTextColor
-            windowTitleLabel.textColor = opaqueSecondaryTextColor
+            appNameLabel.textColor = primaryTextColor
+            windowTitleLabel.textColor = secondaryTextColor
             previewContainer.layer?.borderColor = resolvedCGColor(NSColor.white.withAlphaComponent(0.62))
             previewContainer.layer?.borderWidth = 2
         } else {
@@ -323,8 +366,8 @@ final class SwitcherItemView: NSView {
             selectionBackgroundView.layer?.shadowOffset = .zero
             selectionBackgroundView.layer?.transform = CATransform3DIdentity
             appNameLabel.font = .systemFont(ofSize: 12, weight: .medium)
-            appNameLabel.textColor = opaquePrimaryTextColor
-            windowTitleLabel.textColor = opaqueSecondaryTextColor
+            appNameLabel.textColor = primaryTextColor
+            windowTitleLabel.textColor = secondaryTextColor
             previewContainer.layer?.borderColor = resolvedCGColor(NSColor.separatorColor)
             previewContainer.layer?.borderWidth = 1
         }
@@ -334,16 +377,14 @@ final class SwitcherItemView: NSView {
     }
 
     private func applyTextContrastTreatment() {
-        guard !backgroundVisible else {
-            appNameLabel.shadow = nil
-            windowTitleLabel.shadow = nil
-            return
-        }
-        let shadow = NSShadow()
-        shadow.shadowOffset = .zero
-        shadow.shadowBlurRadius = 1.5
-        shadow.shadowColor = (usesDarkAppearance ? NSColor.black : NSColor.white).withAlphaComponent(0.58)
-        appNameLabel.shadow = shadow
-        windowTitleLabel.shadow = shadow
+        // The wallpaper is unconstrained in transparent mode. Back only the glyph bounds,
+        // not the switcher surface, so semantic label colors remain legible without a second shadow.
+        let backing = backgroundVisible
+            ? NSColor.clear
+            : NSColor.windowBackgroundColor.withAlphaComponent(0.88)
+        appNameLabel.layer?.backgroundColor = resolvedCGColor(backing)
+        windowTitleLabel.layer?.backgroundColor = resolvedCGColor(backing)
+        appNameLabel.shadow = nil
+        windowTitleLabel.shadow = nil
     }
 }

@@ -367,6 +367,9 @@ final class SettingsWindowController: NSWindowController {
             popup.font = .systemFont(ofSize: 13)
         }
         appearancePopup.setAccessibilityLabel("Appearance")
+        revealPopup.setAccessibilityLabel("Reveal Delay")
+        displayPopup.setAccessibilityLabel("Display Scope")
+        switcherModePopup.setAccessibilityLabel("Switcher Mode")
 
         showBackgroundSwitch.target = self
         showBackgroundSwitch.action = #selector(changeShowBackground)
@@ -663,6 +666,7 @@ final class SettingsWindowController: NSWindowController {
         appSpacingValueLabel.stringValue = "\(settings.appSpacing) pt"
         selectedIconZoomSlider.integerValue = settings.selectedIconZoom
         selectedIconZoomValueLabel.stringValue = "\(settings.selectedIconZoom)%"
+        refreshSliderAccessibilityValues()
         showAppNamesSwitch.state = settings.showAppNames ? .on : .off
         darknessSlider.isEnabled = settings.showBackground
         blurSlider.isEnabled = settings.showBackground
@@ -680,6 +684,14 @@ final class SettingsWindowController: NSWindowController {
         }
     }
 
+    private func refreshSliderAccessibilityValues() {
+        darknessSlider.setAccessibilityValueDescription("\(settings.glassDarkness)%")
+        blurSlider.setAccessibilityValueDescription("\(settings.backgroundBlur)%")
+        iconSizeSlider.setAccessibilityValueDescription("\(settings.iconSize) points")
+        appSpacingSlider.setAccessibilityValueDescription("\(settings.appSpacing) points")
+        selectedIconZoomSlider.setAccessibilityValueDescription("\(settings.selectedIconZoom)%")
+    }
+
     @objc private func changeShowBackground() {
         settings.showBackground = showBackgroundSwitch.state == .on
         refreshControls()
@@ -688,11 +700,13 @@ final class SettingsWindowController: NSWindowController {
     @objc private func changeDarkness() {
         settings.glassDarkness = darknessSlider.integerValue
         darknessValueLabel.stringValue = "\(settings.glassDarkness)%"
+        refreshSliderAccessibilityValues()
     }
 
     @objc private func changeBlur() {
         settings.backgroundBlur = blurSlider.integerValue
         blurValueLabel.stringValue = "\(settings.backgroundBlur)%"
+        refreshSliderAccessibilityValues()
     }
 
     @objc private func changeIconSize() {
@@ -700,6 +714,7 @@ final class SettingsWindowController: NSWindowController {
         settings.iconSize = normalized
         iconSizeSlider.integerValue = normalized
         iconSizeValueLabel.stringValue = "\(normalized) pt"
+        refreshSliderAccessibilityValues()
     }
 
     @objc private func changeAppSpacing() {
@@ -707,6 +722,7 @@ final class SettingsWindowController: NSWindowController {
         settings.appSpacing = normalized
         appSpacingSlider.integerValue = normalized
         appSpacingValueLabel.stringValue = "\(normalized) pt"
+        refreshSliderAccessibilityValues()
     }
 
     @objc private func changeSelectedIconZoom() {
@@ -714,6 +730,7 @@ final class SettingsWindowController: NSWindowController {
         settings.selectedIconZoom = normalized
         selectedIconZoomSlider.integerValue = normalized
         selectedIconZoomValueLabel.stringValue = "\(normalized)%"
+        refreshSliderAccessibilityValues()
     }
 
     @objc private func changeShowAppNames() {

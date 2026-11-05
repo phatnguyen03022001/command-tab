@@ -243,4 +243,25 @@ run_test AccessibilityPermissionRecoveryTests \
   "$ROOT/CommandTab/Features/Settings/SettingsWindowController.swift" \
   "$ROOT/CommandTabTests/AccessibilityPermissionRecoveryTests.swift"
 
+run_test SwitcherVisualAccessibilityTests \
+  "$ROOT/CommandTab/System/Windowing/DisplayScope.swift" \
+  "$ROOT/CommandTab/Features/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTab/Features/Switcher/SwitcherPresentationMetrics.swift" \
+  "$ROOT/CommandTab/System/Windowing/WindowModel.swift" \
+  "$ROOT/CommandTab/System/Windowing/DisplayResolver.swift" \
+  "$ROOT/CommandTab/Features/Switcher/SwitcherItemView.swift" \
+  "$ROOT/CommandTab/Features/Switcher/SwitcherPresentationRootView.swift" \
+  "$ROOT/CommandTab/Features/Switcher/SwitcherPanelController.swift" \
+  "$ROOT/CommandTabTests/SwitcherVisualAccessibilityTests.swift"
+
+run_test SettingsAccessibilityTests \
+  "$ROOT/CommandTab/Diagnostics/Logger.swift" \
+  "$ROOT/CommandTab/System/Accessibility/AccessibilityPermission.swift" \
+  "$ROOT/CommandTab/System/Windowing/DisplayScope.swift" \
+  "$ROOT/CommandTab/Features/Settings/CommandTabSettings.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchSettings.swift" \
+  "$ROOT/CommandTab/Features/QuickLaunch/QuickLaunchSettingsView.swift" \
+  "$ROOT/CommandTab/Features/Settings/SettingsWindowController.swift" \
+  "$ROOT/CommandTabTests/SettingsAccessibilityTests.swift"
+
 "$ROOT/CommandTabTests/SourcePolicyTests.sh"

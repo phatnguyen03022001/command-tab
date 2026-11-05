@@ -387,10 +387,12 @@ struct AppearanceCustomizationTests {
         require(appLabel.alphaValue == 1.0 && titleLabel.alphaValue == 1.0, "Background OFF labels must remain fully opaque")
         require(!appLabel.isHidden, "Applications/app-name label must remain visible when background is OFF")
         require(!titleLabel.isHidden, "Meaningful Windows-mode title must remain visible when background is OFF")
-        require(appLabel.shadow != nil && titleLabel.shadow != nil, "Background OFF must activate foreground-only text contrast")
-        require(abs((appLabel.shadow?.shadowBlurRadius ?? -1) - 1.5) < 0.001, "Background OFF primary text shadow blur must be 1.5")
-        require(appLabel.shadow?.shadowOffset == .zero, "Background OFF primary text shadow must have zero offset")
-        require(abs((appLabel.shadow?.shadowColor?.alphaComponent ?? -1) - 0.58) < 0.01, "Background OFF text shadow alpha must be 0.58")
+        require(appLabel.shadow == nil && titleLabel.shadow == nil,
+                "Background OFF must avoid stacking shadows over protective label backing")
+        let appBackingAlpha = appLabel.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }?.alphaComponent ?? -1
+        let titleBackingAlpha = titleLabel.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }?.alphaComponent ?? -1
+        require(abs(appBackingAlpha - 0.88) < 0.01 && abs(titleBackingAlpha - 0.88) < 0.01,
+                "Background OFF must back only the labels, not the entire panel")
         require(root.glassView.isHidden && root.diffusionBacking.isHidden && root.smokedUnderlay.isHidden, "Background OFF must not restore any panel material")
         if #available(macOS 26.0, *), let glass = root.glassView as? NSGlassEffectView {
             require(glass.contentView == nil, "Background OFF must detach reusable content from hidden native glass")

@@ -50,11 +50,17 @@ final class SwitcherPresentationRootView: NSView {
         }
     }
 
-    func setBackgroundVisible(_ visible: Bool) {
-        materialContainer.isHidden = !visible
+    func setBackgroundVisible(_ visible: Bool, reduceTransparency: Bool = false) {
+        materialContainer.isHidden = !visible && !reduceTransparency
+        var backingColor: CGColor!
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            backingColor = (reduceTransparency ? NSColor.windowBackgroundColor : NSColor.clear).cgColor
+        }
+        materialContainer.layer?.backgroundColor = backingColor
+        let showMaterial = visible && !reduceTransparency
 
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
-            if visible {
+            if showMaterial {
                 if glass.contentView !== foregroundView {
                     foregroundView.removeFromSuperview()
                     glass.contentView = foregroundView
@@ -71,7 +77,7 @@ final class SwitcherPresentationRootView: NSView {
                 foregroundView.frame = bounds
             }
         } else {
-            glassView.isHidden = !visible
+            glassView.isHidden = !showMaterial
         }
     }
 

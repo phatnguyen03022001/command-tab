@@ -141,6 +141,7 @@ private final class SeparatorLineView: NSView {
 }
 
 private final class QuickLaunchSlotRowView: NSStackView {
+    private let slot: Int
     private let nameLabel = NSTextField(labelWithString: "Not Configured")
     private let iconView = NSImageView()
     private let badgeView = ShortcutBadgeView()
@@ -148,6 +149,7 @@ private final class QuickLaunchSlotRowView: NSStackView {
     private let clearButton: NSButton
 
     init(slot: Int, choose: @escaping () -> Void, clear: @escaping () -> Void) {
+        self.slot = slot
         chooseButton = ClosureButton(title: "Assign…", action: choose)
         clearButton = ClosureButton(title: "Clear", action: clear)
         super.init(frame: .zero)
@@ -207,6 +209,11 @@ private final class QuickLaunchSlotRowView: NSStackView {
         iconView.contentTintColor = assigned ? nil : .secondaryLabelColor
         chooseButton.title = assigned ? "Change…" : "Assign…"
         clearButton.isEnabled = assigned
+        chooseButton.setAccessibilityLabel(
+            assigned ? "Change application for Command+\(slot), currently \(name)"
+                     : "Assign application to Command+\(slot)"
+        )
+        clearButton.setAccessibilityLabel("Clear application from Command+\(slot), \(name)")
     }
 }
 
