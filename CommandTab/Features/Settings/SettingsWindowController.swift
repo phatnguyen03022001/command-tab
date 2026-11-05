@@ -26,6 +26,7 @@ final class SettingsWindowController: NSWindowController {
     private let showAppNamesSwitch = NSSwitch()
     private lazy var resetAppearanceButton = NSButton(title: "Reset Appearance", target: self, action: #selector(resetAppearanceAction))
     private weak var settingsScrollView: NSScrollView?
+    private var hasPresentedWindow = false
     private let permissionLabel = NSTextField(labelWithString: "")
     private let permissionStatusTitle = NSTextField(labelWithString: "")
     private let permissionStatusIcon = NSImageView()
@@ -80,12 +81,18 @@ final class SettingsWindowController: NSWindowController {
 
     override func showWindow(_ sender: Any?) {
         refreshControls()
-        fitWindowToVisibleScreen()
+        if hasPresentedWindow {
+            recoverOffscreenWindowIfNeeded()
+        } else {
+            fitWindowToVisibleScreen()
+        }
         super.showWindow(sender)
-        window?.center()
         window?.makeKeyAndOrderFront(sender)
         window?.layoutIfNeeded()
-        scrollToTop()
+        if !hasPresentedWindow {
+            scrollToTop()
+            hasPresentedWindow = true
+        }
         recheckAccessibility()
     }
 
@@ -112,6 +119,31 @@ final class SettingsWindowController: NSWindowController {
         let size = NSSize(width: min(520, maxWidth), height: min(640, maxHeight))
         window.setContentSize(size)
         window.center()
+    }
+
+    private func recoverOffscreenWindowIfNeeded() {
+        guard let window, !NSScreen.screens.isEmpty else { return }
+        let frame = window.frame
+        let titleBar = NSRect(x: frame.minX, y: frame.maxY - 44, width: frame.width, height: 44)
+        let titleBarIsReachable = NSScreen.screens.contains { screen in
+            let visible = titleBar.intersection(screen.visibleFrame)
+            return !visible.isNull && visible.width >= 160 && visible.height >= 24
+        }
+        guard !titleBarIsReachable else { return }
+
+        // The old monitor disappeared or the title bar moved out of reach.
+        // Keep the user's window size whenever it fits the surviving display.
+        let visible = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame.insetBy(dx: 16, dy: 16)
+        let size = NSSize(
+            width: min(frame.width, max(window.minSize.width, visible.width)),
+            height: min(frame.height, max(window.minSize.height, visible.height))
+        )
+        window.setFrame(NSRect(
+            x: visible.midX - size.width / 2,
+            y: visible.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        ), display: false)
     }
 
     private func buildUI() {

@@ -67,6 +67,8 @@ Any missing, ambiguous, stale, or changed identity fails closed. Window thumbnai
 
 A session captures one immutable `WindowSessionSnapshot`. Current-Space context is revalidated while an active session is used and immediately before final focus. If the mapping changes, the session is invalidated rather than rebuilt around a different target.
 
+An event-tap timeout or user-input disable cancels any active session without focusing a window; recovered taps preserve the key-up ownership of previously swallowed key-downs. A failed re-enable stops the tap for the existing permission-retry path. `NSApplication.didChangeScreenParametersNotification` revalidates Space and selected-window identity: valid geometry-only changes recenter the visible panel, while invalid identity or unavailable presentation displays cancel the session, including a pending delayed reveal. No display reconciliation or background polling is introduced.
+
 There is no continuous Space tracker or background polling.
 
 ## Switcher UI
@@ -90,6 +92,8 @@ AppKit display preferences are read from `NSWorkspace` and refreshed on `accessi
 `SwitcherItemView` instances are retained to a high-water mark and reconfigured or hidden instead of rebuilt every session. Application icons are cached by stable app key for the process lifetime.
 
 A configurable reveal delay preserves the quick-switch path: a short ⌘Tab interaction can commit before the panel is shown, while continued navigation reveals and updates the reused panel.
+
+Settings centers on first presentation; subsequent opens retain the existing position and scroll offset. An unreachable title bar after display reconfiguration triggers a bounded relocation onto a visible screen without new persisted preferences.
 
 ## Quick Launch
 

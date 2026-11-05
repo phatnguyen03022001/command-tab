@@ -137,9 +137,66 @@ struct HotKeyEventRoutingTests {
         require(!send(tap, 55, [], down: false, type: .flagsChanged), "release forwarded after third session")
         require(send(tap, 48, command), "session can restart after release")
         require(!send(tap, 0, [], type: .tapDisabledByTimeout), "tap disable callback does not consume event")
-        require(send(tap, 48, command, down: false), "temporary tap disable preserves owed Tab up")
+        require(delegate.cancels == 2 && !delegate.isSwitcherSessionActive,
+                "timeout cancels active session rather than committing")
+        require(!send(tap, 48, command, down: false), "failed recovery clears old key ownership")
         tap.stop()
         require(!tap.isRunning, "test does not install an event tap")
+        testInterruptedInputContinuity()
         print("HotKeyEventRoutingTests passed")
+    }
+
+    static func testInterruptedInputContinuity() {
+        let command: CGEventFlags = [.maskCommand]
+        let delegate = RoutingDelegate()
+        var recoveryAttempts = 0
+        let tap = HotKeyEventTap(delegate: delegate, reenableDisabledTap: { _ in
+            recoveryAttempts += 1
+            return true
+        }) { _, _, _, _ in false }
+
+        require(!send(tap, 0, type: .tapDisabledByTimeout), "inactive timeout forwards event")
+        require(delegate.cancels == 0 && recoveryAttempts == 1, "inactive timeout preserves inactivity")
+        require(send(tap, 48, command), "session owns Tab down")
+        require(!send(tap, 0, type: .tapDisabledByTimeout), "active timeout forwards callback")
+        require(!delegate.isSwitcherSessionActive && delegate.cancels == 1,
+                "active timeout cancels exactly once")
+        require(send(tap, 48, command, down: false), "recovered tap pairs owned Tab up")
+        require(!send(tap, 55, [], down: false, type: .flagsChanged), "missed Command release passes")
+        require(delegate.commits == 0, "lost Command release cannot commit a stale selection")
+        require(!send(tap, 0, type: .tapDisabledByTimeout), "repeated timeout forwards event")
+        require(delegate.cancels == 1, "repeated timeout cannot double-cancel")
+
+        require(!send(tap, 13, command), "pre-session W down forwarded")
+        require(send(tap, 48, command), "new session Tab down owned")
+        require(!send(tap, 0, type: .tapDisabledByUserInput), "user-input interruption forwarded")
+        require(delegate.cancels == 2, "user-input interruption cancels session")
+        require(!send(tap, 13, command, down: false), "pre-forwarded W up is never swallowed")
+        require(send(tap, 48, command, down: false), "owned Tab up stays paired")
+
+        require(send(tap, 48, command), "another session Tab down owned")
+        require(!send(tap, 0, type: .tapDisabledByTimeout), "another interruption forwarded")
+        require(!send(tap, 48, [], down: true), "unowned new Tab down passes after timeout")
+        require(!send(tap, 48, [], down: false), "unowned Tab up is not swallowed")
+        require(delegate.cancels == 3 && delegate.commits == 0,
+                "recovery never commits an interrupted session")
+        require(recoveryAttempts == 5, "each notification gets one bounded re-enable attempt")
+        tap.stop()
+
+        let failingDelegate = RoutingDelegate()
+        var failures = 0
+        let failingTap = HotKeyEventTap(delegate: failingDelegate, reenableDisabledTap: { _ in
+            failures += 1
+            return false
+        }) { _, _, _, _ in false }
+        require(send(failingTap, 48, command), "failed-recovery session starts")
+        require(!send(failingTap, 0, type: .tapDisabledByUserInput), "failed recovery forwards event")
+        require(failingDelegate.cancels == 1 && !failingDelegate.isSwitcherSessionActive,
+                "failed enable closes session")
+        require(!send(failingTap, 48, command, down: false), "failed enable clears stale ownership")
+        require(!send(failingTap, 55, [], down: false, type: .flagsChanged), "release forwarded after failure")
+        require(failingDelegate.commits == 0 && failures == 1, "failed enable never selects")
+        require(!failingTap.isRunning, "failed enable must not report running")
+        failingTap.stop()
     }
 }

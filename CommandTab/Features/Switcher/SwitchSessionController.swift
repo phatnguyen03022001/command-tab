@@ -5,6 +5,11 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
     private let enumerator: WindowEnumerator
     private let focusController: WindowFocusController
     private let switcher: SwitcherPanelController
+    // Narrow OS-query seams keep lifecycle regressions synthetic and non-invasive.
+    var snapshotProvider: (DisplayScope) -> WindowSessionSnapshot?
+    var contextIsCurrent: (WindowSessionSnapshot) -> Bool
+    var selectionIsCurrent: (WindowModel, WindowSessionSnapshot) -> Bool
+    var isAccessibilityTrusted: () -> Bool = AccessibilityPermission.isTrusted
 
     private var windows: [WindowModel] = []
     private var snapshot: WindowSessionSnapshot?
@@ -13,6 +18,7 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
     private var sessionID = 0
     private var revealWorkItem: DispatchWorkItem?
     private var terminationObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
     private(set) var isSwitcherSessionActive = false
 
     var applicationTerminator: (pid_t) -> Bool = { pid in
@@ -33,7 +39,19 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
         self.enumerator = enumerator
         self.focusController = focusController
         self.switcher = switcher
+        self.snapshotProvider = { [enumerator] scope in enumerator.currentSnapshot(displayScope: scope) }
+        self.contextIsCurrent = { [enumerator] snapshot in enumerator.isSpaceContextCurrent(snapshot) }
+        self.selectionIsCurrent = { [enumerator] window, snapshot in
+            enumerator.validateForFocus(window, snapshot: snapshot)
+        }
 
+        self.screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleScreenParametersChanged()
+        }
         self.terminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didTerminateApplicationNotification,
             object: nil,
@@ -49,10 +67,11 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
         if let terminationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(terminationObserver)
         }
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
     }
 
     func commandTabPressed(reverse: Bool) -> Bool {
-        guard AccessibilityPermission.isTrusted() else {
+        guard isAccessibilityTrusted() else {
             Log.input.error("Command-Tab ignored because Accessibility is unavailable")
             return false
         }
@@ -76,6 +95,19 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
         guard isSwitcherSessionActive else { return false }
         endSession()
         return true
+    }
+
+    private func handleScreenParametersChanged() {
+        guard isSwitcherSessionActive else { return }
+        // A display change can invalidate the frozen Space snapshot or a window's
+        // display membership even if the keyboard has not produced another event.
+        guard let snapshot, windows.indices.contains(selectedIndex),
+              contextIsCurrent(snapshot), selectionIsCurrent(windows[selectedIndex], snapshot),
+              switcher.repositionForScreenChange(contextDisplayID: windows.first?.displayID) else {
+            Log.windows.notice("Screen configuration invalidated switch session; cancelling without focus")
+            _ = cancelSwitcher()
+            return
+        }
     }
 
     func arrowPressed(reverse: Bool) -> Bool {
@@ -152,7 +184,7 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
         sessionID += 1
         focusController.beginSession()
         let mode = settings.switcherMode
-        guard let newSnapshot = enumerator.currentSnapshot(displayScope: settings.displayScope) else {
+        guard let newSnapshot = snapshotProvider(settings.displayScope) else {
             focusController.endSession()
             Log.windows.error("Authoritative Space/window snapshot unavailable; switch session cancelled")
             return false
@@ -264,7 +296,7 @@ final class SwitchSessionController: HotKeyEventTapDelegate {
     }
 
     private func ensureSessionContextCurrent() -> Bool {
-        guard let snapshot, enumerator.isSpaceContextCurrent(snapshot) else {
+        guard let snapshot, contextIsCurrent(snapshot) else {
             Log.windows.error("Space context changed during active switch session; invalidating session")
             endSession()
             return false

@@ -162,6 +162,25 @@ final class SwitcherPanelController {
         loadThumbnails(windows: windows, sessionID: sessionID, mode: mode)
     }
 
+    // Called only after the session has revalidated its frozen window/Space context.
+    // A delayed reveal needs no frame update; its first show resolves fresh geometry.
+    func repositionForScreenChange(contextDisplayID: CGDirectDisplayID?) -> Bool {
+        guard !NSScreen.screens.isEmpty else { return false }
+        if let contextDisplayID {
+            guard NSScreen.screens.contains(where: { screen in
+                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+                    == contextDisplayID
+            }) else { return false }
+        }
+        guard let panel, panel.isVisible else { return true }
+        let layout = resolveLayout(itemCount: lastItemCount, contextDisplayID: contextDisplayID)
+        if layout.metrics != currentMetrics { applyMetrics(layout.metrics) }
+        position(panel: panel, layout: layout, contextDisplayID: contextDisplayID)
+        applySelectionPresentation(selectedIndex: lastSelectedIndex, itemCount: lastItemCount)
+        ensureSelectionVisible(selectedIndex: lastSelectedIndex, itemCount: lastItemCount)
+        return true
+    }
+
     func update(selectedIndex: Int, sessionID: Int) {
         guard visibleSessionID == sessionID else { return }
         let selectionChanged = lastSelectedIndex != selectedIndex

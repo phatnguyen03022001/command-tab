@@ -13,6 +13,7 @@ protocol HotKeyEventTapDelegate: AnyObject {
 final class HotKeyEventTap {
     private weak var delegate: HotKeyEventTapDelegate?
     private let handleQuickLaunch: (UInt16, CGEventFlags, Bool, Bool) -> Bool
+    private let reenableDisabledTap: (CFMachPort?) -> Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     // Only pair keyUp with keyDown events actually consumed by this tap.
@@ -21,15 +22,22 @@ final class HotKeyEventTap {
 
     var isRunning: Bool {
         guard let tap = eventTap, let source = runLoopSource else { return false }
-        return CFMachPortIsValid(tap) && CFRunLoopContainsSource(CFRunLoopGetMain(), source, .commonModes)
+        return CFMachPortIsValid(tap) && CGEvent.tapIsEnabled(tap: tap)
+            && CFRunLoopContainsSource(CFRunLoopGetMain(), source, .commonModes)
     }
 
     init(
         delegate: HotKeyEventTapDelegate,
+        reenableDisabledTap: @escaping (CFMachPort?) -> Bool = { tap in
+            guard let tap, CFMachPortIsValid(tap), AccessibilityPermission.isTrusted() else { return false }
+            CGEvent.tapEnable(tap: tap, enable: true)
+            return CGEvent.tapIsEnabled(tap: tap)
+        },
         handleQuickLaunch: @escaping (UInt16, CGEventFlags, Bool, Bool) -> Bool
     ) {
         self.delegate = delegate
         self.handleQuickLaunch = handleQuickLaunch
+        self.reenableDisabledTap = reenableDisabledTap
     }
 
     deinit { stop() }
@@ -78,6 +86,8 @@ final class HotKeyEventTap {
     }
 
     func stop() {
+        // Stopping input delivery also invalidates any in-flight keyboard session.
+        if delegate?.isSwitcherSessionActive == true { _ = delegate?.cancelSwitcher() }
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
@@ -94,10 +104,14 @@ final class HotKeyEventTap {
 
     func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            // Preserve pending key ownership in case the tap resumes before keyUp.
-            if let tap = eventTap {
-                Log.input.error("Event tap disabled; attempting safe re-enable")
-                CGEvent.tapEnable(tap: tap, enable: true)
+            // Command release may be missed while the tap is disabled. Never commit
+            // a selection after losing input continuity; keep owned ups if restored.
+            if delegate?.isSwitcherSessionActive == true { _ = delegate?.cancelSwitcher() }
+            if !reenableDisabledTap(eventTap) {
+                Log.input.error("Event tap could not be re-enabled; stopping until permission recovery")
+                stop()
+            } else {
+                Log.input.notice("Event tap re-enabled after interruption")
             }
             return Unmanaged.passUnretained(event)
         }

@@ -143,6 +143,42 @@ struct SettingsLayoutTests {
 
         let visibleHeight = NSScreen.main?.visibleFrame.height ?? 800
         require(window.frame.height <= visibleHeight - 32, "settings window must clamp to screen visible height")
+
+        // Re-showing an existing NSWindow must keep both its position and user scroll context.
+        let customOrigin = NSPoint(x: window.frame.minX + 12, y: window.frame.minY - 12)
+        window.setFrameOrigin(customOrigin)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 260))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        let savedScroll = scroll.contentView.bounds.origin.y
+        require(savedScroll > 100, "synthetic document must allow meaningful scrolling")
+        controller.showWindow(nil) // Already visible.
+        require(abs(window.frame.minX - customOrigin.x) < 1 && abs(window.frame.minY - customOrigin.y) < 1,
+                "bringing visible Settings to front must preserve custom position")
+        require(abs(scroll.contentView.bounds.origin.y - savedScroll) < 1,
+                "bringing visible Settings to front must preserve scroll")
+        window.orderOut(nil)
+        controller.showWindow(nil) // Reopen existing controller/window.
+        require(abs(window.frame.minX - customOrigin.x) < 1 && abs(window.frame.minY - customOrigin.y) < 1,
+                "reopening Settings must not recenter")
+        require(abs(scroll.contentView.bounds.origin.y - savedScroll) < 1,
+                "reopening Settings must keep Quick Launch scroll context")
+
+        let previousSize = window.frame.size
+        window.orderOut(nil)
+        window.setFrameOrigin(NSPoint(x: 100_000, y: 100_000)) // Synthetic disconnected monitor.
+        controller.showWindow(nil)
+        let titleBar = NSRect(x: window.frame.minX, y: window.frame.maxY - 44,
+                              width: window.frame.width, height: 44)
+        require(NSScreen.screens.contains(where: { screen in
+            let visible = titleBar.intersection(screen.visibleFrame)
+            return !visible.isNull && visible.width >= 160 && visible.height >= 24
+        }), "offscreen Settings must recover to a usable display")
+        require(window.frame.width <= previousSize.width + 1 && window.frame.height <= previousSize.height + 1,
+                "offscreen recovery must retain size or shrink only when required")
+        require(window.frame.width >= window.minSize.width && window.frame.height >= window.minSize.height,
+                "offscreen recovery must honor minimum window size")
+        require(abs(scroll.contentView.bounds.origin.y - savedScroll) < 1,
+                "offscreen recovery must preserve scroll position")
         print("SettingsLayoutTests passed")
     }
 }

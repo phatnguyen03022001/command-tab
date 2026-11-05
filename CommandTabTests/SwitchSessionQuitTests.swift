@@ -77,6 +77,7 @@ struct SwitchSessionQuitTests {
         testFocusEvidence()
         testSessionStartPreconditions()
         testExactAXCloseAction()
+        testScreenChangeRecovery()
         testSingleEventTapConstraint()
         print("SwitchSessionQuitTests passed")
     }
@@ -449,6 +450,119 @@ struct SwitchSessionQuitTests {
         )
         require(succeeded == .success && pressCount == 2,
                 "supported exact close button must succeed with one AXPress")
+    }
+
+    static func testScreenChangeRecovery() {
+        let suite = "commandtab.display.recovery.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = CommandTabSettings(defaults: defaults)
+        let displayID = CGMainDisplayID()
+        let window = makeWindow(id: 901, pid: getpid(), bundleIdentifier: "test.commandtab.display",
+                                appName: "Synthetic", title: "Synthetic")
+        let context = VisibleSpaceContext(currentSpaceByDisplay: [displayID: 1])
+        let snapshot = WindowSessionSnapshot(
+            visibleSpaceContext: context, displayScope: .allVisible, activeDisplayID: nil,
+            windows: [window], currentSpaceLatencyMs: 0, membershipLatencyMs: 0, totalLatencyMs: 0
+        )
+        let enumerator = WindowEnumerator()
+        let focus = WindowFocusController()
+        let switcher = SwitcherPanelController(settings: settings)
+        var controller: SwitchSessionController? = SwitchSessionController(
+            settings: settings, enumerator: enumerator, focusController: focus, switcher: switcher
+        )
+        controller!.isAccessibilityTrusted = { true } // No changes to real system permissions.
+        controller!.snapshotProvider = { _ in snapshot } // No live window enumeration.
+        var spaceMapping = context.currentSpaceByDisplay
+        var targetIsValid = true
+        var validationCalls = 0
+        controller!.contextIsCurrent = { $0.visibleSpaceContext.matches(currentSpaceByDisplay: spaceMapping) }
+        controller!.selectionIsCurrent = { target, _ in
+            validationCalls += 1
+            return target.id == window.id && targetIsValid
+        }
+        let postChange = {
+            NotificationCenter.default.post(
+                name: NSApplication.didChangeScreenParametersNotification, object: NSApp
+            )
+        }
+
+        postChange()
+        require(validationCalls == 0, "inactive display change must not validate or create UI")
+        settings.revealDelay = .ms150
+        require(controller!.commandTabPressed(reverse: false), "synthetic session starts")
+        require(!switcher.isVisible, "session starts before delayed reveal")
+        targetIsValid = false
+        postChange()
+        postChange()
+        require(!controller!.isSwitcherSessionActive && !switcher.isVisible,
+                "invalid target cancels pre-reveal session on repeated notifications")
+        require(!controller!.commandKeyReleased(), "invalid session cannot commit on Command release")
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.20))
+        require(!switcher.isVisible, "cancelled delayed reveal must never resurrect panel")
+
+        targetIsValid = true
+        require(controller!.commandTabPressed(reverse: false), "new delayed session starts")
+        postChange()
+        require(controller!.isSwitcherSessionActive && !switcher.isVisible,
+                "unchanged display and Space identity preserve delayed session")
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.20))
+        require(switcher.isVisible, "valid delayed reveal uses current panel geometry")
+        _ = controller!.cancelSwitcher()
+
+        settings.revealDelay = .instant
+        require(controller!.commandTabPressed(reverse: false), "visible synthetic session starts")
+        require(switcher.isVisible, "instant reveal creates synthetic panel")
+        guard let panel = Mirror(reflecting: switcher).children.first(where: { $0.label == "panel" })?.value as? NSPanel else {
+            require(false, "synthetic panel must exist")
+            return
+        }
+        panel.setFrameOrigin(NSPoint(x: 100_000, y: 100_000))
+        postChange()
+        require(controller!.isSwitcherSessionActive && switcher.isVisible,
+                "geometry-only change preserves valid session")
+        require(NSScreen.screens.contains(where: { $0.visibleFrame.intersects(panel.frame) }),
+                "geometry-only change repositions panel onto available screen")
+        postChange()
+        require(controller!.isSwitcherSessionActive, "repeated valid notifications do not cancel")
+        _ = controller!.cancelSwitcher()
+
+        require(controller!.commandTabPressed(reverse: false), "session before display identity change")
+        spaceMapping = [displayID: 2]
+        postChange()
+        require(!controller!.isSwitcherSessionActive && !switcher.isVisible,
+                "Space change cancels stale session and dismisses overlay")
+        require(!controller!.commandKeyReleased(), "Space change cannot commit")
+        spaceMapping = context.currentSpaceByDisplay
+        require(controller!.commandTabPressed(reverse: false), "session before display identity change starts")
+        spaceMapping = [CGDirectDisplayID(4_000_000_000): 1]
+        postChange()
+        require(!controller!.isSwitcherSessionActive, "display identity change cancels session")
+        spaceMapping = context.currentSpaceByDisplay
+
+        // A disconnected presentation display must cancel even if injected Space probes
+        // report a nominally matching mapping; no physical monitor is accessed.
+        let missingDisplay = CGDirectDisplayID(4_000_000_000)
+        let missingWindow = WindowModel(
+            id: 902, pid: getpid(), bundleIdentifier: "test.commandtab.display", appName: "Synthetic",
+            title: "Detached", frame: CGRect(x: 0, y: 0, width: 800, height: 600),
+            displayID: missingDisplay, spaceIDs: [1], iconKey: "test.commandtab.display"
+        )
+        let missingSnapshot = WindowSessionSnapshot(
+            visibleSpaceContext: context, displayScope: .allVisible, activeDisplayID: nil,
+            windows: [missingWindow], currentSpaceLatencyMs: 0, membershipLatencyMs: 0, totalLatencyMs: 0
+        )
+        controller!.snapshotProvider = { _ in missingSnapshot }
+        controller!.selectionIsCurrent = { _, _ in true }
+        require(controller!.commandTabPressed(reverse: false), "missing display synthetic session starts")
+        postChange()
+        require(!controller!.isSwitcherSessionActive && !switcher.isVisible,
+                "disconnected context display cancels instead of stranding panel")
+
+        weak var weakController = controller
+        controller = nil
+        require(weakController == nil, "screen observer must not retain controller")
+        postChange() // Deallocated observer must not invoke its former owner.
     }
 
     // Requirement 17: One CGEvent tap only
