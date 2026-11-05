@@ -102,6 +102,9 @@ struct SwitchSessionQuitTests {
         let resOutside = tap.handle(proxy: fakeProxy, type: .keyDown, event: qDownOutside)
         require(resOutside != nil, "1. Q outside switcher session must pass through normally")
         require(delegate.quitRequestedCount == 0, "1. Q outside switcher session must not call quit")
+        let qUpOutside = CGEvent(keyboardEventSource: nil, virtualKey: 12, keyDown: false)!
+        require(tap.handle(proxy: fakeProxy, type: .keyUp, event: qUpOutside) != nil,
+                "1. Q keyUp outside switcher session must pass through with its down")
 
         // 2. Q inside active switcher session is consumed
         delegate.isSwitcherSessionActive = true
@@ -130,11 +133,11 @@ struct SwitchSessionQuitTests {
         require(resEsc == nil, "13. Escape must be consumed")
         require(delegate.cancelSwitcherCount == 1, "13. Escape must call cancelSwitcher")
 
-        // 14. Command release unchanged
+        // 14. Command release commits and passes through to avoid stuck modifiers
         let releaseEvent = CGEvent(keyboardEventSource: nil, virtualKey: 55, keyDown: false)!
         releaseEvent.flags = []
         let resRelease = tap.handle(proxy: fakeProxy, type: .flagsChanged, event: releaseEvent)
-        require(resRelease == nil, "14. Command release must be consumed")
+        require(resRelease != nil, "14. Command release must reach the background app")
         require(delegate.commandKeyReleasedCount == 1, "14. Command release must call commandKeyReleased")
 
         // 15. Tab / Shift-Tab behavior unchanged

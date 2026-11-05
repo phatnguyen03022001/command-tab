@@ -15,6 +15,9 @@ final class HotKeyEventTap {
     private let handleQuickLaunch: (UInt16, CGEventFlags, Bool, Bool) -> Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    // Only pair keyUp with keyDown events actually consumed by this tap.
+    private var ownedKeyUps = Set<UInt16>()
+    private var forwardedKeyDowns = Set<UInt16>()
 
     var isRunning: Bool {
         guard let tap = eventTap, let source = runLoopSource else { return false }
@@ -85,10 +88,13 @@ final class HotKeyEventTap {
         }
         eventTap = nil
         runLoopSource = nil
+        ownedKeyUps.removeAll()
+        forwardedKeyDowns.removeAll()
     }
 
     func handle(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            // Preserve pending key ownership in case the tap resumes before keyUp.
             if let tap = eventTap {
                 Log.input.error("Event tap disabled; attempting safe re-enable")
                 CGEvent.tapEnable(tap: tap, enable: true)
@@ -100,44 +106,74 @@ final class HotKeyEventTap {
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         let commandDown = flags.contains(.maskCommand)
-        let shiftDown = flags.contains(.maskShift)
 
-        if type == .keyDown, keyCode == KeyCode.tab, commandDown {
-            return delegate.commandTabPressed(reverse: shiftDown) ? nil : Unmanaged.passUnretained(event)
+        if type == .keyUp {
+            if forwardedKeyDowns.remove(keyCode) != nil {
+                ownedKeyUps.remove(keyCode)
+                return Unmanaged.passUnretained(event)
+            }
+            return ownedKeyUps.remove(keyCode) != nil ? nil : Unmanaged.passUnretained(event)
         }
+        if type == .flagsChanged {
+            // Never hide modifier transitions from the foreground app. In particular, it
+            // must see Command released even when that release commits a selection.
+            if delegate.isSwitcherSessionActive && !commandDown {
+                _ = delegate.commandKeyReleased()
+            }
+            return Unmanaged.passUnretained(event)
+        }
+        guard type == .keyDown else { return Unmanaged.passUnretained(event) }
 
-        if type == .keyDown {
-            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if handleQuickLaunch(keyCode, flags, delegate.isSwitcherSessionActive, isRepeat) {
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if isRepeat && forwardedKeyDowns.contains(keyCode) {
+            // The background app saw the original down: always deliver its eventual up.
+            // Suppress Command repeats only while the Switcher owns the session.
+            return delegate.isSwitcherSessionActive && commandDown ? nil : Unmanaged.passUnretained(event)
+        }
+        // A previous swallowed keyUp may have been lost if the tap was disabled.
+        // An unowned new down must never cause its later up to be swallowed.
+        ownedKeyUps.remove(keyCode)
+        if keyCode == KeyCode.tab && commandDown {
+            if delegate.commandTabPressed(reverse: flags.contains(.maskShift)) {
+                ownedKeyUps.insert(keyCode)
                 return nil
             }
+            forwardedKeyDowns.insert(keyCode)
+            return Unmanaged.passUnretained(event)
         }
 
-        if delegate.isSwitcherSessionActive {
-            if type == .flagsChanged, !commandDown {
-                return delegate.commandKeyReleased() ? nil : Unmanaged.passUnretained(event)
-            }
-            if type == .keyDown, keyCode == KeyCode.escape {
-                return delegate.cancelSwitcher() ? nil : Unmanaged.passUnretained(event)
-            }
-            if type == .keyDown, KeyCode.forwardArrows.contains(keyCode) {
-                return delegate.arrowPressed(reverse: false) ? nil : Unmanaged.passUnretained(event)
-            }
-            if type == .keyDown, KeyCode.reverseArrows.contains(keyCode) {
-                return delegate.arrowPressed(reverse: true) ? nil : Unmanaged.passUnretained(event)
-            }
-            if type == .keyDown, keyCode == KeyCode.q, commandDown {
-                let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-                if !isRepeat {
-                    _ = delegate.quitSelectedApplication()
-                }
-                return nil
-            }
-            if type == .keyUp, KeyCode.consumedWhileActive.contains(keyCode) {
-                return nil
-            }
+        if handleQuickLaunch(keyCode, flags, delegate.isSwitcherSessionActive, isRepeat) {
+            ownedKeyUps.insert(keyCode)
+            return nil
         }
 
+        guard delegate.isSwitcherSessionActive else {
+            forwardedKeyDowns.insert(keyCode)
+            return Unmanaged.passUnretained(event)
+        }
+        if keyCode == KeyCode.escape {
+            if delegate.cancelSwitcher() {
+                ownedKeyUps.insert(keyCode)
+                return nil
+            }
+        } else if KeyCode.forwardArrows.contains(keyCode) || KeyCode.reverseArrows.contains(keyCode) {
+            if delegate.arrowPressed(reverse: KeyCode.reverseArrows.contains(keyCode)) {
+                ownedKeyUps.insert(keyCode)
+                return nil
+            }
+        } else if keyCode == KeyCode.q && commandDown {
+            if !isRepeat { _ = delegate.quitSelectedApplication() }
+            ownedKeyUps.insert(keyCode)
+            return nil
+        }
+
+        // The non-activating panel leaves the previous app as key recipient. During a
+        // valid session it must not receive arbitrary Command shortcuts (W/S/Z/Return...).
+        if commandDown {
+            ownedKeyUps.insert(keyCode)
+            return nil
+        }
+        forwardedKeyDowns.insert(keyCode)
         return Unmanaged.passUnretained(event)
     }
 }
@@ -152,7 +188,6 @@ private enum KeyCode {
     static let up: UInt16 = 126
     static let forwardArrows: Set<UInt16> = [right, down]
     static let reverseArrows: Set<UInt16> = [left, up]
-    static let consumedWhileActive: Set<UInt16> = [q, tab, escape, left, right, down, up]
 }
 
 private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInfo in

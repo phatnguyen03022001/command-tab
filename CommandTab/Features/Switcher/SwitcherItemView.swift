@@ -27,7 +27,10 @@ final class SwitcherItemView: NSView {
     private var backgroundVisible = true
 
     var isSelected: Bool = false {
-        didSet { updateSelection() }
+        didSet {
+            setAccessibilitySelected(isSelected)
+            updateSelection()
+        }
     }
 
     init(window: WindowModel, icon: NSImage, mode: SwitcherMode, metrics: SwitcherPresentationMetrics? = nil) {
@@ -96,6 +99,10 @@ final class SwitcherItemView: NSView {
         stack.detachesHiddenViews = true
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.row)
+        // The tile is one semantic choice, not a collection of unrelated image/text elements.
+        setAccessibilityChildren([])
 
         let widthC = widthAnchor.constraint(equalToConstant: resolvedMetrics.itemWidth)
         let heightC = heightAnchor.constraint(equalToConstant: resolvedMetrics.itemHeight)
@@ -214,6 +221,11 @@ final class SwitcherItemView: NSView {
         } else {
             windowTitleLabel.stringValue = ""
         }
+        let appName = window.appName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = appName.isEmpty ? "Unknown application" : appName
+        let title = windowTitleLabel.stringValue
+        setAccessibilityLabel(title.isEmpty ? name : "\(name), \(title)")
+        setAccessibilitySelected(isSelected)
         applyLabelVisibility()
         updateSelection()
     }

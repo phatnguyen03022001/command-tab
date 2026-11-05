@@ -4,6 +4,8 @@ final class SettingsWindowController: NSWindowController {
     private let settings: CommandTabSettings
     private let quickLaunchView: QuickLaunchSettingsView
     private let retryAccessibility: () -> Void
+    private let isAccessibilityTrusted: () -> Bool
+    private var permissionObservers: [NSObjectProtocol] = []
     private let launchAtLoginSwitch = NSSwitch()
     private let menuBarIconSwitch = NSSwitch()
     private let appearancePopup = NSPopUpButton()
@@ -32,11 +34,13 @@ final class SettingsWindowController: NSWindowController {
     init(
         settings: CommandTabSettings,
         quickLaunchSettings: QuickLaunchSettings,
-        retryAccessibility: @escaping () -> Void
+        retryAccessibility: @escaping () -> Void,
+        isAccessibilityTrusted: @escaping () -> Bool = AccessibilityPermission.isTrusted
     ) {
         self.settings = settings
         self.quickLaunchView = QuickLaunchSettingsView(settings: quickLaunchSettings)
         self.retryAccessibility = retryAccessibility
+        self.isAccessibilityTrusted = isAccessibilityTrusted
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -49,6 +53,27 @@ final class SettingsWindowController: NSWindowController {
         fitWindowToVisibleScreen()
         buildUI()
         refreshControls()
+        let center = NotificationCenter.default
+        permissionObservers.append(center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.window?.isVisible == true else { return }
+            self.recheckAccessibility()
+        })
+        permissionObservers.append(center.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.window?.isVisible == true else { return }
+            self.recheckAccessibility()
+        })
+    }
+
+    deinit {
+        for observer in permissionObservers { NotificationCenter.default.removeObserver(observer) }
     }
 
     required init?(coder: NSCoder) { nil }
@@ -61,6 +86,12 @@ final class SettingsWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(sender)
         window?.layoutIfNeeded()
         scrollToTop()
+        recheckAccessibility()
+    }
+
+    private func recheckAccessibility() {
+        refreshControls()
+        retryAccessibility()
     }
 
     private func scrollToTop() {
@@ -636,7 +667,7 @@ final class SettingsWindowController: NSWindowController {
         darknessSlider.isEnabled = settings.showBackground
         blurSlider.isEnabled = settings.showBackground
         quickLaunchView.refresh()
-        if AccessibilityPermission.isTrusted() {
+        if isAccessibilityTrusted() {
             permissionStatusIcon.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Accessibility Enabled")
             permissionStatusIcon.contentTintColor = .systemGreen
             permissionStatusTitle.stringValue = "Accessibility Enabled"
@@ -726,10 +757,7 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func openAccessibility() {
         AccessibilityPermission.openSystemSettings()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.refreshControls()
-            self?.retryAccessibility()
-        }
+        // Recovery is driven by activation/key-window events, not a one-second guess.
     }
 }
 

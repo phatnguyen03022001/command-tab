@@ -60,7 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func installEventTapIfAllowed() {
-        guard AccessibilityPermission.isTrusted() else { return }
+        guard AccessibilityPermission.isTrusted() else {
+            // A revoked grant must not leave an old session or tap intercepting shortcuts.
+            if eventTap.isRunning {
+                _ = sessionController.cancelSwitcher()
+                eventTap.stop()
+            }
+            return
+        }
         if !eventTap.isRunning {
             let installed = eventTap.start()
             if installed {

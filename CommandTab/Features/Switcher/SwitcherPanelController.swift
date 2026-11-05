@@ -17,6 +17,15 @@ final class SwitcherPanelController {
     private var lastMode: SwitcherMode = .applications
     private var lastThumbnailsAvailable = false
     private var thumbnailTask: Task<Void, Never>?
+    private var selectionAnnouncement: DispatchWorkItem?
+    // Injectable to assert intent without launching VoiceOver in regression tests.
+    var announceAccessibilitySelection: (NSView, String) -> Void = { item, message in
+        NSAccessibility.post(
+            element: item,
+            notification: .announcementRequested,
+            userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.low.rawValue]
+        )
+    }
 
     private var backingVEV: NSVisualEffectView?
     private var smokedUnderlay: NSView?
@@ -28,6 +37,9 @@ final class SwitcherPanelController {
         stack.alignment = .centerY
         stack.spacing = currentMetrics.itemSpacing
         stack.detachesHiddenViews = true
+        stack.setAccessibilityElement(true)
+        stack.setAccessibilityRole(.list)
+        stack.setAccessibilityLabel("Command Tab switcher")
         stack.translatesAutoresizingMaskIntoConstraints = false
         return stack
     }()
@@ -130,25 +142,54 @@ final class SwitcherPanelController {
         stackContainer.layoutSubtreeIfNeeded()
         applySelectionPresentation(selectedIndex: selectedIndex, itemCount: windows.count)
         ensureSelectionVisible(selectedIndex: selectedIndex, itemCount: windows.count)
+        accessibilitySelectionChanged(selectedIndex: selectedIndex, sessionID: sessionID, initial: true)
         loadThumbnails(windows: windows, sessionID: sessionID, mode: mode)
     }
 
     func update(selectedIndex: Int, sessionID: Int) {
         guard visibleSessionID == sessionID else { return }
+        let selectionChanged = lastSelectedIndex != selectedIndex
         lastSelectedIndex = selectedIndex
         for (index, view) in itemViews.enumerated() {
             view.isSelected = !view.isHidden && index == selectedIndex
         }
         applySelectionPresentation(selectedIndex: selectedIndex, itemCount: lastItemCount)
         ensureSelectionVisible(selectedIndex: selectedIndex, itemCount: lastItemCount)
+        if selectionChanged {
+            accessibilitySelectionChanged(selectedIndex: selectedIndex, sessionID: sessionID, initial: false)
+        }
     }
 
     func close() {
+        selectionAnnouncement?.cancel()
+        selectionAnnouncement = nil
         visibleSessionID = nil
         thumbnailTask?.cancel()
         thumbnailTask = nil
         panel?.orderOut(nil)
         for item in itemViews { item.previewImageView.image = nil }
+    }
+
+    private func accessibilitySelectionChanged(selectedIndex: Int, sessionID: Int, initial: Bool) {
+        guard itemViews.indices.contains(selectedIndex), !itemViews[selectedIndex].isHidden else { return }
+        let selectedItem = itemViews[selectedIndex]
+        stackView.setAccessibilitySelectedChildren([selectedItem])
+        NSAccessibility.post(element: stackView, notification: .selectedChildrenChanged)
+
+        selectionAnnouncement?.cancel()
+        let label = selectedItem.accessibilityLabel() ?? ""
+        let announcement = initial ? "Command Tab switcher. \(label)" : label
+        // Coalesce rapid keyboard autorepeat; never announce a closed or replaced session.
+        let work = DispatchWorkItem { [weak self, weak selectedItem] in
+            guard let self, let selectedItem,
+                  self.visibleSessionID == sessionID, self.isVisible,
+                  self.itemViews.indices.contains(selectedIndex),
+                  self.itemViews[selectedIndex] === selectedItem,
+                  selectedItem.isSelected else { return }
+            self.announceAccessibilitySelection(selectedItem, announcement)
+        }
+        selectionAnnouncement = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
 
     private func makePanelIfNeeded() -> NSPanel {
